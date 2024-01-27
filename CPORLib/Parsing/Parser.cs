@@ -104,14 +104,50 @@ namespace CPORLib.Parsing
                     {
                         ReadPredicates(eSub, d);
                     }
+                    else if (eSub.Type == ":uncertainties")
+                    {
+                        ReadUncertainties(eSub, d);
+                    }
                     else if (eSub.Type == ":action")
                     {
                         d.AddAction(ReadAction(eSub, d));
+                    }
+                    else if (eSub.Type == ":rule")
+                    {
+                        d.AddRule(ReadRule(eSub, d));
                     }
                 }
             }
 
             return d;
+        }
+
+        private Rule ReadRule(CompoundExpression exp, Domain d)
+        {
+            string sName = exp.SubExpressions[0].ToString();
+            Rule pa = null;
+            int iExpression = 0;
+            for (iExpression = 1; iExpression < exp.SubExpressions.Count; iExpression++)
+            {
+                if (exp.SubExpressions[iExpression].ToString() == ":parameters")
+                {
+                    CompoundExpression ceParams = (CompoundExpression)exp.SubExpressions[iExpression + 1];
+                    if (ceParams.Type != "N/A")
+                    {
+                        pa = new ParameterizedRule(sName);
+                        ReadParameters((CompoundExpression)exp.SubExpressions[iExpression + 1], (ParameterizedRule)pa);
+                    }
+                    iExpression++;
+                }
+                else if (exp.SubExpressions[iExpression].ToString() == ":constraints")
+                {
+                    if (pa == null)
+                        pa = new Rule(sName);
+                    ReadConstraints((CompoundExpression)exp.SubExpressions[iExpression + 1], pa, d, pa is ParameterizedRule);
+                    iExpression++;
+                }
+            }
+            return pa;
         }
 
         private void ReadTypes(CompoundExpression eTypes, Domain d)
@@ -273,6 +309,15 @@ namespace CPORLib.Parsing
                 d.AddPredicate(p);
             }
         }
+        private void ReadUncertainties(CompoundExpression exp, Domain d)
+        {
+            foreach (Expression e in exp.SubExpressions)
+            {
+                Predicate p = ReadPredicate((CompoundExpression)e, d);
+                //d.AddPredicate(p); 
+                d.AddUncertainty(p);
+            }
+        }
         private Predicate ReadPredicate(CompoundExpression exp, Domain d)
         {
             ParametrizedPredicate pp = new ParametrizedPredicate(exp.Type);
@@ -401,6 +446,49 @@ namespace CPORLib.Parsing
 
         }
 
+        private void ReadParameters(CompoundExpression exp, ParameterizedRule pa)
+        {
+            //unfortunately, expressions have a weird non standard structure with no type - (?i - pos ?j - pos )
+            //so we must have a special case 
+            List<string> lTokens = exp.ToTokenList();
+            List<string> lNames = new List<string>();
+            string sType = "";
+            int iCurrent = 0;
+            while (iCurrent < lTokens.Count)
+            {
+                if (lTokens[iCurrent] == "-")
+                {
+                    sType = lTokens[iCurrent + 1];
+                    foreach (string sName in lNames)
+                        pa.AddParameter(new Parameter(sType, sName));
+                    lNames = new List<string>();
+                    sType = "";
+                    iCurrent += 2;
+                }
+                else
+                {
+                    lNames.Add(lTokens[iCurrent]);
+                    iCurrent++;
+                }
+            }
+            if (lNames.Count != 0) //allowing no types specified
+            {
+                foreach (string sName in lNames)
+                    pa.AddParameter(new Parameter("OBJ", sName));
+            }
+
+        }
+        private void ReadConstraints(CompoundExpression exp, Rule pa, Domain d, bool bParametrized)
+        {
+            string sOperator = exp.Type;
+            Formula f = null;
+            if (pa is ParameterizedRule)
+                f = ReadFormula(exp, ((ParameterizedRule)pa).ParameterNameToType, bParametrized, d);
+            else
+                f = ReadFormula(exp, d.ConstantNameToType, bParametrized, d);
+            pa.SetConstraints(f);
+
+        }
         private Formula ReadFormula(CompoundExpression exp, Dictionary<string, string> dParameterNameToType, bool bParamterized, Domain d)
         {
             bool bPredicate = true;
@@ -578,7 +666,7 @@ namespace CPORLib.Parsing
             }
             if (bParametrized)
                 if (!MatchParametersToPredicateDeclaration((ParametrizedPredicate)p, d))
-                    throw new Exception("Paramter does not match predicate declaration " + p);
+                    throw new Exception("Parameter does not match predicate declaration " + p);
 
             if (bParametrized && bAllConstants)
             {

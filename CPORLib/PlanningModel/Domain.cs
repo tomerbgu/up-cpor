@@ -20,6 +20,9 @@ namespace CPORLib.PlanningModel
         public List<PlanningAction> Actions { get; set; }
         public List<Constant> Constants { get; protected set; }
         public List<Predicate> Predicates { get; protected set; }
+        public List<Rule> Rules{ get; protected set; }
+        public List<string> Uncertainties { get; protected set; }
+
         public List<string> Functions { get; protected set; }
         public List<string> m_lAlwaysKnown { get; protected set; }
         private List<string> m_lAlwaysConstant;
@@ -42,6 +45,8 @@ namespace CPORLib.PlanningModel
             Actions = new List<PlanningAction>();
             Constants = new List<Constant>();
             Predicates = new List<Predicate>();
+            Uncertainties = new List<string>();
+            Rules = new List<Rule>();
             Types = new List<string>();
             m_lAlwaysKnown = new List<string>();
             m_lAlwaysKnown.Add("increase");
@@ -61,7 +66,7 @@ namespace CPORLib.PlanningModel
 
         public void AddType(string sType)
         {
-            if(!Types.Contains(sType))
+            if (!Types.Contains(sType))
                 Types.Add(sType);
         }
         public void AddType(string sType, string sParentType)
@@ -82,7 +87,7 @@ namespace CPORLib.PlanningModel
 
         public void AddAction(PlanningAction a)
         {
-            if(a is ParametrizedAction pa)
+            if (a is ParametrizedAction pa)
                 pa.FixParametersNames();
             Actions.Add(a);
             if (a.Effects != null)
@@ -138,10 +143,10 @@ namespace CPORLib.PlanningModel
         }
         public void AddPredicate(Predicate p)
         {
-            if(p is ParametrizedPredicate pp)
+            if (p is ParametrizedPredicate pp)
             {
                 ParametrizedPredicate ppNew = new ParametrizedPredicate(pp.Name);
-                foreach(Parameter param in pp.Parameters)
+                foreach (Parameter param in pp.Parameters)
                 {
                     string sName = param.Name;
                     if (!sName.StartsWith("?"))
@@ -149,9 +154,30 @@ namespace CPORLib.PlanningModel
                     Parameter paramNew = new Parameter(param.Type, sName);
                     ppNew.AddParameter(paramNew);
                 }
-                p = ppNew; 
+                p = ppNew;
             }
             Predicates.Add(p);
+            m_lAlwaysKnown.Add(p.Name);
+            m_lAlwaysConstant.Add(p.Name);
+        }
+
+        public void AddUncertainty(Predicate p)
+        {
+            if (p is ParametrizedPredicate pp)
+            {
+                ParametrizedPredicate ppNew = new ParametrizedPredicate(pp.Name);
+                foreach (Parameter param in pp.Parameters)
+                {
+                    string sName = param.Name;
+                    if (!sName.StartsWith("?"))
+                        sName = "?" + sName;
+                    Parameter paramNew = new Parameter(param.Type, sName);
+                    ppNew.AddParameter(paramNew);
+                }
+                p = ppNew;
+            }
+            Predicates.Add(p);
+            Uncertainties.Add(p.Name);
             m_lAlwaysKnown.Add(p.Name);
             m_lAlwaysConstant.Add(p.Name);
         }
@@ -287,18 +313,22 @@ namespace CPORLib.PlanningModel
             dTagged.Types.Add(Utilities.VALUE);
             dTagged.TypeHierarchy = new Dictionary<string, string>(TypeHierarchy);
             dTagged.Constants = CreateTaggedConstants(dTags);
- 
+
 
             List<Predicate> lPredicates = CreateTaggedPredicates();
             foreach (Predicate p in lPredicates)
                 dTagged.AddPredicate(p);
+
+            //List<Predicate> lUncertainPredicates = CreateTaggedUncertainties();
+            //foreach (Predicate p in lUncertainPredicates)
+            //    dTagged.AddUncertainty(p);
 
             List<Predicate> lAdditionalPredicates = new List<Predicate>();
             List<PlanningAction> lAllActions = GetAllKnowledgeActions(dTags);
             foreach (PlanningAction a in lAllActions)
                 dTagged.AddAction(a);
 
-            
+
             List<PlanningAction> lReasoningActions = CreateReasoningActions(dTags, pCurrent, lDeadends);
             foreach (PlanningAction a in lReasoningActions)
                 dTagged.AddAction(a);
@@ -381,7 +411,7 @@ namespace CPORLib.PlanningModel
             }
         }
 
-        
+
 
         private Domain RemoveNonDeterministicEffects()
         {
@@ -1046,7 +1076,7 @@ namespace CPORLib.PlanningModel
                         aRefute.AddPrecondition(Utilities.Observed);
                         lReasoningActions.Add(aRefute);
 
-                        
+
                     }
                 }
             }
@@ -1117,7 +1147,7 @@ namespace CPORLib.PlanningModel
 
             Predicate ppK = Predicate.GenerateKnowPredicate(pp);
             Predicate ppNK = Predicate.GenerateKnowPredicate(pp.Negate());
-            
+
             //ppK.Parametrized = true;
             cfAnd.AddOperand(ppK.Negate());//add ~know p to the preconditions - no point in activating merge when we know p
             cfAnd.AddOperand(ppNK.Negate());//add ~know ~p to the preconditions - no point in activating merge when we know p
@@ -1133,8 +1163,8 @@ namespace CPORLib.PlanningModel
                 foreach (Parameter param in pp.Parameters)
                     ppKGivenT.AddParameter(param);
                 ppKGivenT.AddParameter(new Constant(Utilities.TAG, sTag));
-                if(bTrue)
-                    ppKGivenT.AddParameter(new Constant(Utilities.VALUE_PARAMETER, Utilities.TRUE_VALUE) );
+                if (bTrue)
+                    ppKGivenT.AddParameter(new Constant(Utilities.VALUE_PARAMETER, Utilities.TRUE_VALUE));
                 else
                     ppKGivenT.AddParameter(new Constant(Utilities.VALUE_PARAMETER, Utilities.FALSE_VALUE));
                 cfOr.AddOperand(new PredicateFormula(ppKGivenT));
@@ -1645,7 +1675,7 @@ namespace CPORLib.PlanningModel
             List<Predicate> lTaggedPredicates = new List<Predicate>();
 
             lTaggedPredicates.Add(Utilities.Observed);
-
+            //var filteredItems = Predicates.Where(p => !Uncertainties.Contains(p.Name));
             foreach (Predicate pOrg in Predicates)
             {
                 List<Argument> lParams = new List<Argument>();
@@ -1714,7 +1744,7 @@ namespace CPORLib.PlanningModel
                     ppGiven.AddParameter(new Parameter(Utilities.VALUE, Utilities.VALUE_PARAMETER));
                     lTaggedPredicates.Add(ppGiven);
 
-                    
+
 
                     if (Options.RemoveConflictingConditionalEffects)
                     {
@@ -1724,7 +1754,7 @@ namespace CPORLib.PlanningModel
                         ppNotGiven.AddParameter(Utilities.VALUE_PARAMETER, Utilities.VALUE);
                         lTaggedPredicates.Add(ppNotGiven);
 
-                        
+
                     }
 
                     if (Options.SplitConditionalEffects)
@@ -1743,15 +1773,125 @@ namespace CPORLib.PlanningModel
                 throw new NotImplementedException();
 
             }
-            
-            
+
+
             for (int iTime = 0; iTime < Options.TIME_STEPS; iTime++)
             {
                 GroundedPredicate gp = new GroundedPredicate("time" + iTime);
                 lTaggedPredicates.Add(gp);
             }
-             
+
             return lTaggedPredicates;
+        }
+
+        private List<Predicate> CreateTaggedUncertainties()
+        {
+            List<Predicate> lTaggedUncertainPredicates = new List<Predicate>();
+
+            //lTaggedPredicates.Add(Utilities.Observed);
+            var filteredItems = Predicates.Where(p => Uncertainties.Contains(p.Name));
+            foreach (Predicate pOrg in filteredItems)
+            {
+                List<Argument> lParams = new List<Argument>();
+                ParametrizedPredicate pp = null;
+                if (pOrg is ParametrizedPredicate)
+                {
+                    pp = (ParametrizedPredicate)pOrg;
+                    lParams = new List<Argument>(pp.Parameters);
+                }
+                else
+                {
+                    pp = new ParametrizedPredicate(pOrg.Name);
+                }
+
+                lTaggedUncertainPredicates.Add(pp);
+
+
+                if (Options.RemoveConflictingConditionalEffects)
+                {
+                    Predicate pNot = pp.Clone();
+                    pNot.Name = "Not-" + pp.Name;
+                    lTaggedUncertainPredicates.Add(pNot);
+                }
+
+                if (Options.SplitConditionalEffects)
+                {
+                    Predicate pAdd = pp.Clone();
+                    pAdd.Name = pp.Name + "-Add";
+                    lTaggedUncertainPredicates.Add(pAdd);
+
+                    Predicate pRemove = pp.Clone();
+                    pRemove.Name = pp.Name + "-Remove";
+                    lTaggedUncertainPredicates.Add(pRemove);
+                }
+
+                if (!AlwaysKnown(pp))
+                {
+                    Predicate pK = pp.Clone();
+                    pK.Name = "K" + pp.Name;
+                    lTaggedUncertainPredicates.Add(pK);
+
+                    Predicate pKN = pp.Clone();
+                    pKN.Name = "KN" + pp.Name;
+                    lTaggedUncertainPredicates.Add(pKN);
+
+                    if (Options.RemoveConflictingConditionalEffects)
+                    {
+                        ParametrizedPredicate pNotK = new ParametrizedPredicate("Not-K" + pp.Name);
+
+                        foreach (Argument param in lParams)
+                            pNotK.AddParameter(param);
+
+                        pNotK.AddParameter(new Parameter(Utilities.VALUE, Utilities.VALUE_PARAMETER));
+                        lTaggedUncertainPredicates.Add(pNotK);
+                    }
+
+                    if (Options.SplitConditionalEffects)
+                    {
+                        throw new NotImplementedException();
+                    }
+
+                    ParametrizedPredicate ppGiven = new ParametrizedPredicate("KGiven" + pp.Name);
+                    foreach (Argument param in lParams)
+                        ppGiven.AddParameter(param);
+                    ppGiven.AddParameter(new Parameter(Utilities.TAG, Utilities.TAG_PARAMETER));
+                    ppGiven.AddParameter(new Parameter(Utilities.VALUE, Utilities.VALUE_PARAMETER));
+                    lTaggedUncertainPredicates.Add(ppGiven);
+
+
+
+                    if (Options.RemoveConflictingConditionalEffects)
+                    {
+                        ParametrizedPredicate ppNotGiven = new ParametrizedPredicate("Not-KGiven" + pp.Name);
+                        foreach (Argument param in lParams)
+                            ppNotGiven.AddParameter(param);
+                        ppNotGiven.AddParameter(Utilities.VALUE_PARAMETER, Utilities.VALUE);
+                        lTaggedUncertainPredicates.Add(ppNotGiven);
+
+
+                    }
+
+                    if (Options.SplitConditionalEffects)
+                    {
+                        throw new NotImplementedException();
+                    }
+                }
+            }
+
+            if (Options.RemoveConflictingConditionalEffects)
+            {
+                throw new NotImplementedException();
+
+            }
+
+
+            for (int iTime = 0; iTime < Options.TIME_STEPS; iTime++)
+            {
+                GroundedPredicate gp = new GroundedPredicate("time" + iTime);
+                lTaggedUncertainPredicates.Add(gp);
+            }
+
+            return lTaggedUncertainPredicates;
         }
 
         private void WriteTaggedPredicates(StreamWriter sw, List<Predicate> lAdditinalPredicates)
@@ -1964,7 +2104,7 @@ namespace CPORLib.PlanningModel
         private List<Constant> CreateTaggedConstants(Dictionary<string, ISet<Predicate>> dTags)
         {
             List<Constant> lConstants = new List<Constant>(Constants);
-         
+
             foreach (KeyValuePair<string, ISet<Predicate>> p in dTags)
             {
                 lConstants.Add(new Constant(Utilities.TAG, p.Key));
@@ -2813,13 +2953,13 @@ namespace CPORLib.PlanningModel
             {
                 if (lToBind.Count > dBindings.Keys.Count)
                 {
-                    foreach(Parameter p in lToBind)
+                    foreach (Parameter p in lToBind)
                     {
-                        if(!dBindings.ContainsKey(p))
+                        if (!dBindings.ContainsKey(p))
                         {
-                            foreach(Constant c in Constants)
+                            foreach (Constant c in Constants)
                             {
-                                if(c.Type == p.Type)
+                                if (c.Type == p.Type)
                                 {
                                     Dictionary<Parameter, Constant> dNewBindings = new Dictionary<Parameter, Constant>(dBindings);
                                     dNewBindings[p] = c;
@@ -3043,7 +3183,7 @@ namespace CPORLib.PlanningModel
                         ISet<Predicate> lPredicates = a.Observe.GetAllPredicates();
                         foreach (Predicate p in lPredicates)
                         {
-                            if (m_lAlwaysKnown.Contains(p.Name))
+                            if (m_lAlwaysKnown.Contains(p.Name))// && !Uncertainties.Contains(p.Name)
                             {
                                 m_lAlwaysKnown.Remove(p.Name);
                             }
@@ -3059,7 +3199,7 @@ namespace CPORLib.PlanningModel
             sw.WriteLine("(:predicates");
             foreach (Predicate p in Predicates)
             {
-                
+
                 sw.Write("(" + p.Name);//write regular predicate
                 if (p is ParametrizedPredicate pp)
                 {
@@ -3151,7 +3291,7 @@ namespace CPORLib.PlanningModel
             WriteActions(sw, bWriteObserveActions, false, null);
             sw.WriteLine(")");
             sw.Flush();
-            
+
             return msDomain;
         }
 
@@ -3442,6 +3582,13 @@ namespace CPORLib.PlanningModel
             if (TypeHierarchy.ContainsKey(sType2))
                 return ParentOf(sType1, TypeHierarchy[sType2]);
             return false;
+        }
+
+        public void AddRule(Rule rule)
+        {
+            if (rule is ParameterizedRule)
+                ((ParameterizedRule)rule).FixParametersNames();
+            Rules.Add(rule);
         }
     }
 }
