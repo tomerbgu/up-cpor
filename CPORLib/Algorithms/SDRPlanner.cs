@@ -32,7 +32,83 @@ namespace CPORLib.Algorithms
             //Debug.WriteLine("Started online replanning for " + Domain.Name + ", " + DateTime.Now);
             //no deadend support for now
             BeliefState bsInitial = problem.GetInitialBelief();
+            HashSet<Predicate> predList = new HashSet<Predicate>();
+            //ISet<string> lies = new HashSet<string>();
+            //lies.Add("(not (opened p2-3))");
+            ////lies.Add("(not (free-up ))");
+            //lies.Add("(opened p1-4)");
+            ////lies.Add("(at p1-3)");
+            ////lies.Add("(not (opened p2-3))");
+            ////lies.Add("(adj p1-3 p2-3)");
+            bool safe=false, wumpus = false, gold = false, pit = false;
+            foreach (Predicate p in bsInitial.Observed)
+            {
+                if (domain.Uncertainties.Contains(p.Name))
+                {
+                    if (domain.Name == "unix")
+                    {
+                        if (RandomGenerator.NextDouble() < 0.5)
+                        {
+                            Console.WriteLine("negated this: " + p.ToString());
+                            predList.Add(p);
+                        }
+                    }
+                    if (domain.Name == "doors")
+                    {
+                        if (p.ToString().Contains("opened p3-") && RandomGenerator.NextDouble() < 0.5)
+                        {
+                            Console.WriteLine("negated this: " + p.ToString());
+                            predList.Add(p);
+                        }
+                    }
+                
+                    if (domain.Name == "blocksworld")
+                    {
+                        if (RandomGenerator.NextDouble() < 0.8)
+                        {
+                            Console.WriteLine("negated this: " + p.ToString());
+                            predList.Add(p);
+                        }
+                    }
+                    if (domain.Name == "wumpus")
+                    {
+                        if(p.ToString().Contains("safe p2-1"))
+                        //if (RandomGenerator.NextDouble() < 0.0 && p.Name == "safe" && !safe)
+                        {
+                            Console.WriteLine("negated this: " + p.ToString());
+                            predList.Add(p);
+                            safe = true;
+                        }
+                        //if (p.Name == "pit-at" && !pit)
+                        //{
+                        //    Console.WriteLine("negated this: " + p.ToString());
+                        //    predList.Add(p);
+                        //    pit = true;
+                        //}
+                        //if (p.Name == "wumpus-at" && !wumpus)
+                        //{
+                        //    Console.WriteLine("negated this: " + p.ToString());
+                        //    predList.Add(p);
+                        //    wumpus = true;
+                        //}
+                        //if (p.Name == "gold-at" && !gold && p.Negation)
+                        //{
+                        //    Console.WriteLine("negated this: " + p.ToString());
+                        //    predList.Add(p);
+                        //    gold = true;
+                        //}
+                    }
+                }
+            }
+            foreach (Predicate p in predList)
+            {
+                //bsInitial.Observed.Remove(p);
+                //bsInitial.AddObserved(p.Negate());
+                bsInitial.ReviseInitialBelief(p, p.Negate(), domain);
+            }
             CurrentState = bsInitial.GetPartiallySpecifiedState();
+            //CurrentState.PropogateObservedPredicates();
+
             FutureActions = null;
             NextActionIndex= 0;
             ExpectingObservation = false;
@@ -90,7 +166,8 @@ namespace CPORLib.Algorithms
             if(a.Observe == null && sObservation != null)
             {
                 Error = "Action was not a sensing action, null observation expected.";
-                return false;
+                //CurrentState.RemoveObservedPreCond(a);
+                //return true;
             }
             if (a.Observe != null && sObservation == null)
             {
@@ -98,39 +175,6 @@ namespace CPORLib.Algorithms
                 return false;
             }
             PartiallySpecifiedState psNext = CurrentState.Apply(a, sObservation);
-                /*
-            CurrentState.ApplyOffline(a, out bool bPreconditionFailure, out PartiallySpecifiedState psTrue
-                , out PartiallySpecifiedState psFalse, true);
-            if(bPreconditionFailure)
-            {
-                Error = "Could not execute the next action, preconditions do not hold.";
-                return false;
-            }
-            bool bObservation = true;
-            if (sObservation != null)
-            {
-                sObservation = sObservation.ToLower().Trim();
-                bObservation = (sObservation == "true");
-            }
-            if(bObservation)
-            {
-                if(psTrue == null)
-                {
-                    Error = "The recevied observation is not consistent with the current state.";
-                    return false;
-                }
-                CurrentState = psTrue;
-            }
-            else
-            {
-                if (psFalse == null)
-                {
-                    Error = "The recevied observation is not consistent with the current state.";
-                    return false;
-                }
-                CurrentState = psFalse;
-            }
-                */
             if(psNext == null)
             {
                 Error = "Failed to apply the action at the current state.";
@@ -226,7 +270,7 @@ namespace CPORLib.Algorithms
                             if (ts.TotalMinutes > 60)
                                 throw new Exception("Execution taking too long");
                             Debug.WriteLine((int)(ts.TotalMinutes) + "," + cActions + ") " + Domain.Name + ", executing action " + sAction);
-
+                            Console.WriteLine("Executed " + sAction/* + ", received " + sObservation*/);
                             lExecutedPlans.Last().Add(sAction);
                             DateTime dtBefore = DateTime.Now;
 
