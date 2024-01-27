@@ -513,6 +513,18 @@ namespace CPORLib.PlanningModel
             return AddToObservedList(p);
         }
 
+        public bool RemoveObservedPreCond(Action a)
+        {
+            ISet<Predicate> pred = a.Preconditions.GetAllPredicates();
+            foreach (Predicate p in pred)
+            {
+                m_bsInitialBelief.Observed.Remove(p);
+                Observed.Remove(p);
+            }
+            m_bsInitialBelief.ReviseInitialBelief(a.Preconditions.Negate(), this);
+            return true;
+        }
+
         private bool AddToObservedList(Predicate p)
         {
 
@@ -1378,7 +1390,6 @@ namespace CPORLib.PlanningModel
                 bsNew.UnderlyingEnvironmentState = sNew;
                 if (!bPropogateOnly && bsNew.Time != sNew.Time)
                     Debug.WriteLine("BUGBUG");
-
             }
 
             if (a.Effects != null)
@@ -1449,18 +1460,23 @@ namespace CPORLib.PlanningModel
                 return null;
 
             DateTime dtStart = DateTime.Now;
-
-            if (aOrg.Observe == null && sObservation != null || aOrg.Observe != null && sObservation == null)
+            Action a;
+            if (aOrg.Observe != null && sObservation == null)
                 return null;
-
-            Action a = aOrg.ApplyObserved(m_lObserved);
-            
-
-            if (a.Preconditions != null && !IsApplicable(a))
+            else if (aOrg.Observe == null && sObservation != null)
+            {
+                RemoveObservedPreCond(aOrg);
                 return null;
+            }
+            else
+            {
+                a = aOrg.ApplyObserved(m_lObserved);
 
-            a.ComputeRegressions();
+                if (a.Preconditions != null && !IsApplicable(a))
+                    return null;
 
+                a.ComputeRegressions();
+            }
             tsPre += DateTime.Now - dtStart;
             dtStart = DateTime.Now;
 
