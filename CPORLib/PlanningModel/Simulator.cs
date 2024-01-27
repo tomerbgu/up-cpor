@@ -26,7 +26,7 @@ namespace CPORLib.PlanningModel
         {
             PartiallySpecifiedState psNext = CurrentState.Apply(a, out Formula fObserve);
             if (psNext == null)
-                throw new Exception("Action " + a.Name + " is not applicable in the current belief state");
+                return "Fail";
             CurrentState = psNext;
             if (a.Observe == null)
                 return null;

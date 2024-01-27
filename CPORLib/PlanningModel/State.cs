@@ -198,8 +198,6 @@ namespace CPORLib.PlanningModel
             //if (m_lPredicates.Count != all.Count)
             //    Console.Write("*");
 
-            if (a.Preconditions != null && !a.Preconditions.IsTrue(all, MaintainNegations))
-                return null;
 
             State sNew = Clone();
 
