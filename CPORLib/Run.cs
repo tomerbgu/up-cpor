@@ -96,7 +96,7 @@ namespace CPORLib
 
             if (bOnline)
             {
-                int cIterations = 10, cSuccess = 0;
+                int cIterations = 1, cSuccess = 0;
                 int idx = 0;
                 for (int i = 0; i < cIterations; i++)
                 {

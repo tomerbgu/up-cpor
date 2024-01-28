@@ -513,15 +513,32 @@ namespace CPORLib.PlanningModel
             return AddToObservedList(p);
         }
 
-        public bool RemoveObservedPreCond(Action a)
+        private bool RemoveObservedPreCond(Action a)
         {
             ISet<Predicate> pred = a.Preconditions.GetAllPredicates();
+            CompoundFormula cf;
+            GroundedPredicate pCanonical;
             foreach (Predicate p in pred)
             {
                 m_bsInitialBelief.Observed.Remove(p);
                 Observed.Remove(p);
+                Hidden.Add(p);
+
+                cf = new CompoundFormula("or");
+                cf.SimpleAddOperand(p);
+                cf.SimpleAddOperand(p.Negate());
+                m_bsInitialBelief.Hidden.Add(cf);
+
+                m_bsInitialBelief.Unknown.Add(p);
+
+                pCanonical = (GroundedPredicate)p.Canonical();
+                if (!m_bsInitialBelief.Unknown.Contains(pCanonical))
+                    m_bsInitialBelief.Unknown.Add(pCanonical);
             }
+                
             m_bsInitialBelief.ReviseInitialBelief(a.Preconditions.Negate(), this);
+            
+            //Observed.Add(a.Preconditions.Negate()); //Guy previously said to remove this
             return true;
         }
 

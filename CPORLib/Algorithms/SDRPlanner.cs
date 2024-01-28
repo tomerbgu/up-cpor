@@ -47,7 +47,9 @@ namespace CPORLib.Algorithms
                 {
                     if (domain.Name == "unix")
                     {
-                        if (RandomGenerator.NextDouble() < 0.5)
+                        if (p.ToString().Contains("sub-dir root sub21"))
+                        //if (p.ToString().Contains("file-in-dir my-file root"))
+                        //if (RandomGenerator.NextDouble() < 0.5)
                         {
                             Console.WriteLine("negated this: " + p.ToString());
                             predList.Add(p);
