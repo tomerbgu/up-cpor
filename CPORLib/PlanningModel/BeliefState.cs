@@ -3298,5 +3298,21 @@ namespace CPORLib.PlanningModel
             }
         }
 
+        public void ReviseInitialBelief(Predicate toRemove, Predicate toAdd, Domain domain)
+        {
+            bool rulesHold = true;
+            foreach(Rule rule in domain.Rules)
+            {
+                if(rulesHold && !rule.RuleHolds(toRemove, toAdd, this))
+                {
+                    rulesHold = false;
+                }
+            }
+            if (rulesHold)
+            {
+                Observed.Remove(toRemove);
+                Observed.Add(toAdd);
+            }
+        }
     }
 }

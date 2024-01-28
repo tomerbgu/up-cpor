@@ -96,10 +96,8 @@ namespace CPORLib
 
             if (bOnline)
             {
-                Random rnd = new Random(0);
-                //sdr.OnlineReplanning();
                 int cIterations = 10, cSuccess = 0;
-                    int idx = 0;
+                int idx = 0;
                 for (int i = 0; i < cIterations; i++)
                 {
                     SDRPlanner sdr = new SDRPlanner(domain, problem);
@@ -107,19 +105,11 @@ namespace CPORLib
                     Console.WriteLine("Starting " + domain.Name);
                     while (!sim.GoalReached)
                     {
-                        
                         string sAction = sdr.GetAction();
                         if (sAction == null)
                             Console.Write("*");
                         string sObservation = sim.Apply(sAction);
                         bool bResult = sdr.SetObservation(sObservation);
-                        if (!bResult)
-                        {
-                            sObservation = "true";
-                            if (rnd.NextDouble() < 0.5)
-                                sObservation = "false";
-                            bResult = sdr.SetObservation(sObservation);
-                        }
                         Console.WriteLine(idx + ") Executed " + sAction + ", received " + sObservation);
                         idx++;
                         
