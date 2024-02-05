@@ -513,7 +513,7 @@ namespace CPORLib.PlanningModel
             return AddToObservedList(p);
         }
 
-        private bool RemoveObservedPreCond(Action a)
+        public bool RemoveObservedPreCond(Action a)
         {
             ISet<Predicate> pred = a.Preconditions.GetAllPredicates();
             CompoundFormula cf;

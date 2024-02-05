@@ -110,7 +110,6 @@ namespace CPORLib.Algorithms
             }
             CurrentState = bsInitial.GetPartiallySpecifiedState();
             //CurrentState.PropogateObservedPredicates();
-
             FutureActions = null;
             NextActionIndex= 0;
             ExpectingObservation = false;
@@ -141,7 +140,7 @@ namespace CPORLib.Algorithms
                 else
                     bPreconditionFailure = true;
             }
-
+            //return ManualSolve(Domain, Problem, CurrentState);
             List<string> lPlan = Plan(CurrentState, bPreconditionFailure, out bool bDeadEndReached, out State sChosen);
             if (lPlan == null || lPlan.Count ==0)
             {

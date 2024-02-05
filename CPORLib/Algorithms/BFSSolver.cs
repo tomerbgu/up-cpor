@@ -1,11 +1,15 @@
 ﻿using CPORLib.LogicalUtilities;
 using CPORLib.PlanningModel;
 using CPORLib.Tools;
+using Microsoft.SolverFoundation.Services;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Xml.Linq;
 using Action = CPORLib.PlanningModel.PlanningAction;
+using Domain = CPORLib.PlanningModel.Domain;
 
 namespace CPORLib.Algorithms
 {
@@ -57,6 +61,87 @@ namespace CPORLib.Algorithms
             }
             return null;
         }
+
+        private void modifyStartState(Domain domain, BeliefState s)
+        {
+            GroundedPredicate p = new GroundedPredicate("sub-dir", false);
+            Constant c1 = new Constant("dir", "root");
+            Constant c2 = new Constant("dir", "sub21");
+            p.AddConstant(c1);
+            p.AddConstant(c2);
+            s.ReviseInitialBelief(p, p.Negate(), domain);
+        }
+
+        public Action ManualSolve(Problem p, Domain d, PartiallySpecifiedState state, bool bApplyAllMerges)
+        {
+            PartiallySpecifiedState sStart = state;
+            PartiallySpecifiedState sCurrent = null, sNext = null;
+            BeliefState bs = p.GetInitialBelief();
+            bs.ChooseState(true);
+            PartiallySpecifiedState CurrentState = new PartiallySpecifiedState(bs), NextState = null;
+            
+            int cProcessed = 0;
+            Action a = null;
+            sCurrent = sStart;
+            while (!sCurrent.IsGoalState())
+            {
+                List<Action> lActions = d.GroundAllActions(sCurrent.Observed, false);
+                Console.WriteLine("\nAvailable actions:");
+                for (int i = 0; i < lActions.Count; i++)
+                {
+                    Action ac = lActions[i];
+                    if (ac.Preconditions == null || ac.Preconditions.IsTrue(sCurrent.Observed, false))
+                        Console.WriteLine(i + ") " + ac.Name);
+                }
+                Console.Write("Choose action number: ");
+                int iAction = int.Parse(Console.ReadLine());
+                a = lActions[iAction];
+                
+                NextState = CurrentState.Apply(a, out Formula fObserve);
+                if (NextState != null)
+                {
+                    foreach (Predicate pNew in NextState.Observed)
+                        if (!sCurrent.Observed.Contains(pNew))
+                            Console.WriteLine(pNew);
+                    if (fObserve != null)
+                    {
+                        Console.WriteLine(fObserve.ToString());
+                        sNext = sCurrent.Apply(a.Name, fObserve.ToString());
+                    }
+                    else
+                        sNext = sCurrent.Apply(a, out Formula fObserve2);
+                    CurrentState = NextState;
+                    if (sNext != null)
+                        sCurrent = sNext;
+                }
+                else
+                {
+                    sCurrent.RemoveObservedPreCond(a);
+                    Console.WriteLine("Failed");
+                }
+            }
+            return a;
+        }
+
+        //public bool SetObservation(string sObservation)
+        //{
+        //    PartiallySpecifiedState psNext = CurrentState.Apply(a, sObservation);
+        //    if (psNext == null)
+        //    {
+        //        Error = "Failed to apply the action at the current state.";
+        //        return false;
+        //    }
+        //    CurrentState = psNext;
+        //    NextActionIndex++;
+        //    if (NextActionIndex == FutureActions.Count || sObservation != null)
+        //    {
+        //        FutureActions = null;
+        //        NextActionIndex = -1;
+        //    }
+        //    ExpectingObservation = false;
+        //    return true;
+        //}
+
 
         public List<Action> ManualSolve(Problem p, Domain d, bool bApplyAllMerges)
         {

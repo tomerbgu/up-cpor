@@ -255,6 +255,23 @@ namespace CPORLib.Algorithms
             return lFiltered;
         }
 
+        public static string ManualSolve(Domain d, Problem p, PartiallySpecifiedState state)
+        {
+
+            BFSSolver solver = new BFSSolver();
+            
+
+            Action lAction = solver.ManualSolve(p, d, state, true);
+
+
+            //List<string> lActionNames = new List<string>();
+            //foreach (Action a in lActions)
+            //{
+            //    if (a != null)
+            //        lActionNames.Add(a.Name.Replace("_", " "));
+            //}
+            return lAction.Name;
+        }
 
         public static List<string> ManualSolve(Domain d, Problem p)
         {
