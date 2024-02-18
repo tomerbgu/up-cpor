@@ -112,10 +112,6 @@ namespace CPORLib.Parsing
                     {
                         d.AddAction(ReadAction(eSub, d));
                     }
-                    else if (eSub.Type == ":rule")
-                    {
-                        d.AddRule(ReadRule(eSub, d));
-                    }
                 }
             }
 
@@ -796,6 +792,9 @@ namespace CPORLib.Parsing
         private void ReadGoal(Problem p, Domain d, Expression eGoal)
         {
             Formula fGoal = ReadGroundedFormula((CompoundExpression)eGoal, d);
+            //TODO check if this is necessary
+            Predicate gp = ReadPredicate((CompoundExpression)eGoal, d);
+            p.pGoal = gp;
             p.Goal = fGoal;
         }
 

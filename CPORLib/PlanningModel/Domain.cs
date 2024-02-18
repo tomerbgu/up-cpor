@@ -20,7 +20,6 @@ namespace CPORLib.PlanningModel
         public List<PlanningAction> Actions { get; set; }
         public List<Constant> Constants { get; protected set; }
         public List<Predicate> Predicates { get; protected set; }
-        public List<Rule> Rules{ get; protected set; }
         public List<string> Uncertainties { get; protected set; }
 
         public List<string> Functions { get; protected set; }
@@ -46,7 +45,6 @@ namespace CPORLib.PlanningModel
             Constants = new List<Constant>();
             Predicates = new List<Predicate>();
             Uncertainties = new List<string>();
-            Rules = new List<Rule>();
             Types = new List<string>();
             m_lAlwaysKnown = new List<string>();
             m_lAlwaysKnown.Add("increase");
@@ -3582,13 +3580,6 @@ namespace CPORLib.PlanningModel
             if (TypeHierarchy.ContainsKey(sType2))
                 return ParentOf(sType1, TypeHierarchy[sType2]);
             return false;
-        }
-
-        public void AddRule(Rule rule)
-        {
-            if (rule is ParameterizedRule)
-                ((ParameterizedRule)rule).FixParametersNames();
-            Rules.Add(rule);
         }
     }
 }

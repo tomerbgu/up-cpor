@@ -23,7 +23,7 @@ namespace CPORLib.Algorithms
         private bool ExpectingObservation;
         public string Error { get; private set; }
         public bool GoalReached { get { return CurrentState.IsGoalState(); } }
-
+        private bool CheckGoalReached = true;
 
         public SDRPlanner(Domain domain, Problem problem): base(domain, problem)    
         {
@@ -32,7 +32,11 @@ namespace CPORLib.Algorithms
             //Debug.WriteLine("Started online replanning for " + Domain.Name + ", " + DateTime.Now);
             //no deadend support for now
             BeliefState bsInitial = problem.GetInitialBelief();
+
+
+
             HashSet<Predicate> predList = new HashSet<Predicate>();
+            /*
             //ISet<string> lies = new HashSet<string>();
             //lies.Add("(not (opened p2-3))");
             ////lies.Add("(not (free-up ))");
@@ -40,6 +44,7 @@ namespace CPORLib.Algorithms
             ////lies.Add("(at p1-3)");
             ////lies.Add("(not (opened p2-3))");
             ////lies.Add("(adj p1-3 p2-3)");
+            */
             bool safe=false, wumpus = false, gold = false, pit = false;
             foreach (Predicate p in bsInitial.Observed)
             {
@@ -48,9 +53,10 @@ namespace CPORLib.Algorithms
                     if (domain.Name == "unix")
                     {
                         if (p.ToString().Contains("sub-dir root sub21"))
-                        //if (p.ToString().Contains("file-in-dir my-file root"))
-                        //if (RandomGenerator.NextDouble() < 0.5)
-                        {
+                            //if (p.ToString().Contains("file-in-dir my-file root"))
+                            //if (RandomGenerator.NextDouble() < 0.5)
+                            //if (p.ToString().Contains("file-in-dir my-file sub11") || p.ToString().Contains("file-in-dir my-file root"))
+                            {
                             Console.WriteLine("negated this: " + p.ToString());
                             predList.Add(p);
                         }
@@ -81,35 +87,34 @@ namespace CPORLib.Algorithms
                             predList.Add(p);
                             safe = true;
                         }
-                        //if (p.Name == "pit-at" && !pit)
-                        //{
-                        //    Console.WriteLine("negated this: " + p.ToString());
-                        //    predList.Add(p);
-                        //    pit = true;
-                        //}
-                        //if (p.Name == "wumpus-at" && !wumpus)
-                        //{
-                        //    Console.WriteLine("negated this: " + p.ToString());
-                        //    predList.Add(p);
-                        //    wumpus = true;
-                        //}
-                        //if (p.Name == "gold-at" && !gold && p.Negation)
-                        //{
-                        //    Console.WriteLine("negated this: " + p.ToString());
-                        //    predList.Add(p);
-                        //    gold = true;
-                        //}
+                        if (p.Name == "pit-at" && !pit)
+                        {
+                            Console.WriteLine("negated this: " + p.ToString());
+                            predList.Add(p);
+                            pit = true;
+                        }
+                        if (p.Name == "wumpus-at" && !wumpus)
+                        {
+                            Console.WriteLine("negated this: " + p.ToString());
+                            predList.Add(p);
+                            wumpus = true;
+                        }
+                        if (p.Name == "gold-at" && !gold && p.Negation)
+                        {
+                            Console.WriteLine("negated this: " + p.ToString());
+                            predList.Add(p);
+                            gold = true;
+                        }
                     }
                 }
             }
             foreach (Predicate p in predList)
             {
-                //bsInitial.Observed.Remove(p);
-                //bsInitial.AddObserved(p.Negate());
-                bsInitial.ReviseInitialBelief(p, p.Negate(), domain);
+                bsInitial.Observed.Remove(p);
+                bsInitial.AddObserved(p.Negate());
             }
+
             CurrentState = bsInitial.GetPartiallySpecifiedState();
-            //CurrentState.PropogateObservedPredicates();
             FutureActions = null;
             NextActionIndex= 0;
             ExpectingObservation = false;
@@ -126,8 +131,23 @@ namespace CPORLib.Algorithms
             }
             if (GoalReached)
             {
-                Error = "Goal already reached, no additional actions should be executed.";
-                return null;
+                if (CheckGoalReached)
+                {
+                    CheckGoalReached = false;
+                    //check if there is smarter way to do this
+                    CurrentState.m_bsInitialBelief.Observed.Remove(Problem.pGoal);
+                    CurrentState.Observed.Remove(Problem.pGoal);
+                    CurrentState.Hidden.Add(Problem.pGoal);
+                    //CurrentState.m_bsInitialBelief.Hidden.Add((CompoundFormula)Problem.Goal);
+
+                    CurrentState.m_bsInitialBelief.Unknown.Add(Problem.pGoal.Canonical());
+                }
+                else
+                {
+                    Error = "Goal already reached, no additional actions should be executed.";
+                    return null;
+                }
+
             }
             bool bPreconditionFailure = false;
             if (FutureActions != null && NextActionIndex < FutureActions.Count)
@@ -141,6 +161,18 @@ namespace CPORLib.Algorithms
                     bPreconditionFailure = true;
             }
             //return ManualSolve(Domain, Problem, CurrentState);
+            bool testing = false;
+            if (testing)
+            {
+                List<Action> lActions = Domain.GroundAllActions(CurrentState.Observed, false);
+                Console.WriteLine("\nAvailable actions:");
+                for (int i = 0; i < lActions.Count; i++)
+                {
+                    Action ac = lActions[i];
+                    if (ac.Preconditions == null || ac.Preconditions.IsTrue(CurrentState.Observed, false))
+                        Console.WriteLine(i + ") " + ac.Name);
+                }
+            }
             List<string> lPlan = Plan(CurrentState, bPreconditionFailure, out bool bDeadEndReached, out State sChosen);
             if (lPlan == null || lPlan.Count ==0)
             {
@@ -183,7 +215,7 @@ namespace CPORLib.Algorithms
             }
             CurrentState = psNext;
             NextActionIndex++;
-            if(NextActionIndex == FutureActions.Count || sObservation != null)
+            if(NextActionIndex == FutureActions.Count || (sObservation != null && sObservation != "Fail"))
             {
                 FutureActions = null;
                 NextActionIndex = -1;

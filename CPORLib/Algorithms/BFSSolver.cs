@@ -62,16 +62,6 @@ namespace CPORLib.Algorithms
             return null;
         }
 
-        private void modifyStartState(Domain domain, BeliefState s)
-        {
-            GroundedPredicate p = new GroundedPredicate("sub-dir", false);
-            Constant c1 = new Constant("dir", "root");
-            Constant c2 = new Constant("dir", "sub21");
-            p.AddConstant(c1);
-            p.AddConstant(c2);
-            s.ReviseInitialBelief(p, p.Negate(), domain);
-        }
-
         public Action ManualSolve(Problem p, Domain d, PartiallySpecifiedState state, bool bApplyAllMerges)
         {
             PartiallySpecifiedState sStart = state;

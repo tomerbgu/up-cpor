@@ -1762,6 +1762,7 @@ namespace CPORLib.FFCS
         public SparseArray(int iSize)
         {
             Size = iSize;
+            Values = new Dictionary<int, T>();
         }
         public SparseArray(int iSize, T vInit)
         {

@@ -7,7 +7,7 @@ public class Program
 {
     public static void RunTest(string sName, bool bOnline)
     {
-        string sPath = @"..\..\..\..\Tests\" + sName;
+        string sPath = @"C:\Users\travkaie\OneDrive - Intel Corporation\Documents\School\up-cpor\Tests\" + sName;
         //string sPath = @"C:\Users\Guy\OneDrive - Ben Gurion University of the Negev\Research\projects\AIPlan4EU\up-cpor\Tests\" + sName;
         string sDomainFile = Path.Combine(sPath, "d.pddl");
         string sProblemFile = Path.Combine(sPath, "p.pddl");
@@ -22,47 +22,30 @@ public class Program
         FFUtilities.Verbose = false;
         gcmd_line.display_info = 0;
         gcmd_line.debug = 0;
-
-        //RunTest("localize5noisy", bOnline);
-        
-        RunTest("doors15", bOnline);
-        //RunTest("wumpus10", bOnline);        
-        
-        RunTest("blocks3", bOnline);
-        RunTest("localize5", bOnline);
-
-
-
-        RunTest("medpks010", bOnline);
-        
-        
-        
-        RunTest("doors5", bOnline); 
-
-              
-        RunTest("colorballs2-2", bOnline);
-        RunTest("blocks2", bOnline);
         RunTest("unix1", bOnline);
-        RunTest("wumpus05", bOnline);
 
-
-
-        
-
-        RunTest("blocks3", bOnline);
-        RunTest("blocks2", bOnline);
-        //RunTest("wumpus05", bOnline);
-        //RunTest("medpks010", bOnline);
-        //RunTest("unix1", bOnline);
-        //RunTest("localize5", bOnline);
         //RunTest("doors5", bOnline);
-        //RunTest("colorballs2-2", bOnline);   
+        RunTest("doors5deadend", bOnline);
+        //RunTest("doors15Tomer", bOnline);
+        //RunTest("doors15", bOnline);
+
+        //RunTest("blocks2", bOnline);
+        //RunTest("blocks3", bOnline);
+
+        //RunTest("wumpus05", bOnline);
+        //RunTest("wumpus10", bOnline);
+
+        //RunTest("localize5", bOnline);
+        //RunTest("colorballs2-2", bOnline);
+        //RunTest("localize5knoisy", bOnline);
+        //RunTest("medpks010", bOnline);
+
     }
 
     public static void Main(string[] args)
     {
-        TestAll(false);
-        //return;
+        TestAll(true);
+        return;
 
         //TestClassicalFFCS();
 

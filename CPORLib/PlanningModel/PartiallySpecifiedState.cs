@@ -485,11 +485,14 @@ namespace CPORLib.PlanningModel
                     return true;
                 if (fToRegress.IsFalse(pssCurrent.Observed))
                     return false;
-                Formula fRegressed = fToRegress.Regress(pssCurrent.GeneratingAction, pssCurrent.Observed);
-                //Formula fRegressed = fToRegress.Regress(GeneratingAction);
-                cRegressions++;
-
-                fCurrent = fRegressed;
+                //TODO check if necessary
+                if (pssCurrent.GeneratingAction != null)
+                {
+                    Formula fRegressed = fToRegress.Regress(pssCurrent.GeneratingAction, pssCurrent.Observed);
+                    fCurrent = fRegressed;
+                }
+                    //Formula fRegressed = fToRegress.Regress(GeneratingAction);
+                cRegressions++;               
                 pssCurrent = pssCurrent.m_sPredecessor;
             }
             fReduced = fCurrent.Reduce(pssCurrent.Observed);
@@ -527,9 +530,9 @@ namespace CPORLib.PlanningModel
                 cf = new CompoundFormula("or");
                 cf.SimpleAddOperand(p);
                 cf.SimpleAddOperand(p.Negate());
-                m_bsInitialBelief.Hidden.Add(cf);
+                //m_bsInitialBelief.Hidden.Add(cf);
 
-                m_bsInitialBelief.Unknown.Add(p);
+                m_bsInitialBelief.Unknown.Add(p.Canonical());
 
                 pCanonical = (GroundedPredicate)p.Canonical();
                 if (!m_bsInitialBelief.Unknown.Contains(pCanonical))
@@ -1482,8 +1485,23 @@ namespace CPORLib.PlanningModel
                 return null;
             else if (aOrg.Observe == null && sObservation != null)
             {
-                RemoveObservedPreCond(aOrg);
-                return null;
+                //TODO make less wastefull
+                State sNew2 = null;
+                if (UnderlyingEnvironmentState != null)
+                    sNew2 = UnderlyingEnvironmentState.Apply(aOrg);
+
+                PartiallySpecifiedState bsNew2 = new PartiallySpecifiedState(this, aOrg);
+
+                if (sNew2 != null)
+                {
+                    bsNew2.UnderlyingEnvironmentState = sNew2;
+                }
+
+                bsNew2.RemoveObservedPreCond(aOrg);
+
+
+                bsNew2.GeneratingAction = GeneratingAction;
+                return bsNew2;
             }
             else
             {
@@ -1734,7 +1752,7 @@ namespace CPORLib.PlanningModel
                 bool bChanged = false;
                 //fToRegress = ((CompoundFormula)fToRegress).RemoveNestedConjunction(out bChanged).Simplify();
             }
-            if (fToRegress.IsTrue(null))
+            if (fToRegress.IsTrue(null) || GeneratingAction==null)
                 return fToRegress;
             if (fToRegress.IsFalse(null))
                 Debug.Assert(false);
@@ -2156,7 +2174,8 @@ namespace CPORLib.PlanningModel
             PartiallySpecifiedState pssCurrent = this;
             while (pssCurrent.m_sPredecessor != null)
             {
-                lActions.Insert(0, pssCurrent.GeneratingAction);
+                if (pssCurrent.GeneratingAction != null)
+                    lActions.Insert(0, pssCurrent.GeneratingAction);
                 pssCurrent = pssCurrent.m_sPredecessor;
             }
             m_bsInitialBelief.GetTaggedDomainAndProblem(this, lActions, dsStrategy, bPreconditionFailure, out cTags, out dTagged, out pTagged);

@@ -14,6 +14,7 @@ namespace CPORLib.PlanningModel
 
         public string Name { get; private set; }
         public Formula Goal { get; set; }
+        public Predicate pGoal { get; set; }
         public Domain Domain { get; private set; }
         private HashSet<Predicate> m_lKnown;
         private List<CompoundFormula> m_lHidden;
