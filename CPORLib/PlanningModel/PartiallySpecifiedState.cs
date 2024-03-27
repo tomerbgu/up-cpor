@@ -2,6 +2,7 @@
 using CPORLib.LogicalUtilities;
 using CPORLib.Parsing;
 using CPORLib.Tools;
+using Microsoft.SolverFoundation.Services;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -20,6 +21,7 @@ namespace CPORLib.PlanningModel
         public Dictionary<GroundedPredicate, Formula> regressionFormula = null;
         public int countOfActionFromRoot = 0;
         public GenericArraySet<Predicate> Observed { get { return m_lObserved; } }
+        public GenericArraySet<Predicate> Verified { get; set; }
         public GenericArraySet<Predicate> Hidden { get { return m_lHidden; } }
         public GenericArraySet<Predicate> m_lObserved;
         protected GenericArraySet<Predicate> m_lHidden;
@@ -195,7 +197,14 @@ namespace CPORLib.PlanningModel
 
             SetDeadendList(original.deadEndList);
 
-
+            if (original.Verified != null)
+            {
+                Verified = original.Verified;
+            }
+            else
+            {
+                Verified = new GenericArraySet<Predicate>();
+            }
         }
 
         private void SetDeadendListII(List<Formula> lOrg)
@@ -329,7 +338,7 @@ namespace CPORLib.PlanningModel
             m_lDirectlyObserved = new List<Predicate>();
 
             SetDeadendList(Problem.DeadEndList);
-
+            Verified = new GenericArraySet<Predicate>();
         }
         public PartiallySpecifiedState(PartiallySpecifiedState sPredecessor, Action aGeneratingAction)
         {
@@ -374,7 +383,14 @@ namespace CPORLib.PlanningModel
             m_lDirectlyObserved = new List<Predicate>(sPredecessor.m_lDirectlyObserved);
 
             SetDeadendList(sPredecessor.deadEndList);
-
+            if (sPredecessor.Verified != null)
+            {
+                Verified = sPredecessor.Verified;
+            }
+            else
+            {
+                Verified = new GenericArraySet<Predicate>();
+            }
         }
 
         public void ForgetPotentialEffects()
@@ -519,18 +535,28 @@ namespace CPORLib.PlanningModel
         public bool RemoveObservedPreCond(Action a)
         {
             ISet<Predicate> pred = a.Preconditions.GetAllPredicates();
-            CompoundFormula cf;
+            Formula toRegress = a.Preconditions.Negate();
+            ISet<Predicate> verified = new GenericArraySet<Predicate>();
+            var filteredPred = pred.Where(p => Problem.Domain.Uncertainties.Contains(p.Name));
+            CompoundFormula cf;//, cfAll = new CompoundFormula("or");
             GroundedPredicate pCanonical;
-            foreach (Predicate p in pred)
+            foreach (Predicate p in filteredPred)
             {
+                if (Verified.Contains(p))
+                {
+                    verified.Add(p);
+                    continue;
+                }
                 m_bsInitialBelief.Observed.Remove(p);
                 Observed.Remove(p);
                 Hidden.Add(p);
 
-                cf = new CompoundFormula("or");
-                cf.SimpleAddOperand(p);
-                cf.SimpleAddOperand(p.Negate());
+                //cf = new CompoundFormula("or");
+                //cf.SimpleAddOperand(p);
+                //cf.SimpleAddOperand(p.Negate());
                 //m_bsInitialBelief.Hidden.Add(cf);
+
+                //cfAll.AddOperand(p.Negate());
 
                 m_bsInitialBelief.Unknown.Add(p.Canonical());
 
@@ -538,8 +564,18 @@ namespace CPORLib.PlanningModel
                 if (!m_bsInitialBelief.Unknown.Contains(pCanonical))
                     m_bsInitialBelief.Unknown.Add(pCanonical);
             }
-                
-            m_bsInitialBelief.ReviseInitialBelief(a.Preconditions.Negate(), this);
+            toRegress = toRegress.ApplyKnown(verified);
+            toRegress = toRegress.Simplify();
+            if (toRegress is PredicateFormula)
+            {
+                PartiallySpecifiedState pssCurrent = this;
+                while (pssCurrent != null)
+                {
+                    pssCurrent.Observed.Remove(((PredicateFormula)toRegress).Predicate.Negate());
+                    pssCurrent = pssCurrent.Predecessor;
+                }
+            }
+            m_bsInitialBelief.ReviseInitialBelief(toRegress, this);
             
             //Observed.Add(a.Preconditions.Negate()); //Guy previously said to remove this
             return true;
@@ -591,8 +627,11 @@ namespace CPORLib.PlanningModel
             if (f is PredicateFormula)
             {
                 Predicate p = ((PredicateFormula)f).Predicate;
+
                 if (AddObserved(p))
+                {
                     hsNew.Add(p);
+                }
             }
             else
             {
@@ -600,6 +639,32 @@ namespace CPORLib.PlanningModel
                 if (cf.Operator == "and")
                     foreach (Formula fSub in cf.Operands)
                         hsNew.UnionWith(AddObserved(fSub));
+                else
+                {
+                    //do nothing here - not adding formulas currently, only certainties
+                    //throw new NotImplementedException();
+                }
+            }
+            return hsNew;
+        }
+
+        public HashSet<Predicate> AddVerified(Formula f)
+        {
+
+            HashSet<Predicate> hsNew = new HashSet<Predicate>();
+            if (f is PredicateFormula)
+            {
+                Predicate p = ((PredicateFormula)f).Predicate;
+                if (Verified.Contains(p.Negate()))
+                    Verified.Remove(p.Negate());
+                Verified.Add(p);
+            }
+            else
+            {
+                CompoundFormula cf = (CompoundFormula)f;
+                if (cf.Operator == "and")
+                    foreach (Formula fSub in cf.Operands)
+                        hsNew.UnionWith(AddVerified(fSub));
                 else
                 {
                     //do nothing here - not adding formulas currently, only certainties
@@ -1451,14 +1516,13 @@ namespace CPORLib.PlanningModel
                 /*
                 if (ReviseInitialBelief(fObserve))
                     bsNew.PropogateObservedPredicates();
-                 * */
+                    * */
                 HashSet<int> hsModified = m_bsInitialBelief.ReviseInitialBelief(fObserve, this);
                 if (hsModified.Count > 0)
                 {
                     if (!Options.OptimizeMemoryConsumption)
                         bsNew.PropogateObservedPredicates();
                 }
-
             }
 
             tsObs += DateTime.Now - dtStart;
@@ -1481,6 +1545,7 @@ namespace CPORLib.PlanningModel
 
             DateTime dtStart = DateTime.Now;
             Action a;
+            bool actionFailed = (aOrg.Observe == null && sObservation != null);
             if (aOrg.Observe != null && sObservation == null)
                 return null;
             else if (aOrg.Observe == null && sObservation != null)
@@ -1499,8 +1564,7 @@ namespace CPORLib.PlanningModel
 
                 bsNew2.RemoveObservedPreCond(aOrg);
 
-
-                bsNew2.GeneratingAction = GeneratingAction;
+                bsNew2.GeneratingAction = GeneratingAction; //TPDP maybe this needs to be aOrg
                 return bsNew2;
             }
             else
@@ -1511,6 +1575,12 @@ namespace CPORLib.PlanningModel
                     return null;
 
                 a.ComputeRegressions();
+            }
+            if (aOrg.Preconditions != null)
+            {
+                AddObserved(aOrg.Preconditions);
+                if (!actionFailed)
+                    AddVerified(aOrg.Preconditions);
             }
             tsPre += DateTime.Now - dtStart;
             dtStart = DateTime.Now;
@@ -1550,6 +1620,7 @@ namespace CPORLib.PlanningModel
                 else
                 {
                     bsNew.AddEffects(a.Effects);
+                    bsNew.AddVerified(a.Effects);
                 }
             }
 
@@ -1582,6 +1653,7 @@ namespace CPORLib.PlanningModel
 
                 bsNew.GeneratingObservation = fObserve;
                 bsNew.AddObserved(fObserve);
+                bsNew.AddVerified(fObserve);
 
                 /*
                 if (ReviseInitialBelief(fObserve))
@@ -1745,8 +1817,7 @@ namespace CPORLib.PlanningModel
                 fWithObservation.AddOperand(GeneratingObservation);
             Formula fReduced = fWithObservation.Reduce(Observed);
              */
-            Formula fReduced = f.Reduce(Observed);
-            Formula fToRegress = fReduced;
+            Formula fToRegress = f.Reduce(Observed);
             if (fToRegress is CompoundFormula)
             {
                 bool bChanged = false;
@@ -1755,7 +1826,7 @@ namespace CPORLib.PlanningModel
             if (fToRegress.IsTrue(null) || GeneratingAction==null)
                 return fToRegress;
             if (fToRegress.IsFalse(null))
-                Debug.Assert(false);
+                Debug.Assert(false); //whats happening is that the fToRegress is false in the past according to bs
             if (GeneratingAction.HasConditionalEffects)
             {
                 Formula fRegressed = fToRegress.Regress(GeneratingAction, Observed);
@@ -1841,7 +1912,7 @@ namespace CPORLib.PlanningModel
                 Action aRevised = GeneratingAction.ApplyObserved(lNewPredicates);
                 foreach (Predicate p in aRevised.GetMandatoryEffects())
                 {
-                    if (!m_lObserved.Contains(p))
+                    if (!m_lObserved.Contains(p) && !m_lObserved.Contains(p.Negate())) //TODO TOMER should the second one be Verified.Contains(p.Negate())
                     {
                         hsNextNewPredicates.Add(p);
                         if (!Options.OptimizeMemoryConsumption && !Options.ComputeCompletePlanTree)

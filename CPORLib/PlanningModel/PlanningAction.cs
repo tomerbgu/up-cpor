@@ -842,7 +842,7 @@ namespace CPORLib.PlanningModel
 
                 aNew.Preconditions = cfPreconditions;
             }
-            if (Effects != null)
+            if (Effects != null || lConditions.Count() > 0)
             {
                 HashSet<Predicate> lKnowEffects = new HashSet<Predicate>();
                 CompoundFormula cfEffects = new CompoundFormula("and");
@@ -890,7 +890,7 @@ namespace CPORLib.PlanningModel
                 }
                 aNew.Effects = cfEffects;
             }
-            if (Observe != null)
+            else if (Observe != null)
             {
                 if (aNew.Effects == null)
                     aNew.Effects = new CompoundFormula("and");
@@ -904,7 +904,6 @@ namespace CPORLib.PlanningModel
                 cfWhen.AddOperand(pObserve.Negate());
                 cfWhen.AddOperand(Predicate.GenerateKnowPredicate(pObserve.Negate()));
                 ((CompoundFormula)aNew.Effects).AddOperand(cfWhen);
-
             }
             return aNew;
         }

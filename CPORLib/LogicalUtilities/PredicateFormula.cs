@@ -443,14 +443,13 @@ namespace CPORLib.LogicalUtilities
 
         public override Formula ApplyKnown(ISet<Predicate> lKnown)
         {
-            return this;
-            /* Seems like this is what we want, but perhaps not here
+            //return this;
+            // Seems like this is what we want, but perhaps not here
             if (lKnown.Contains(Predicate))
                 return new PredicateFormula(Utilities.TRUE_PREDICATE);
             else if(lKnown.Contains(Predicate.Negate()))
                 return new PredicateFormula(Utilities.FALSE_PREDICATE);
             return this;
-             * */
         }
 
         public override List<Predicate> GetNonDeterministicEffects()

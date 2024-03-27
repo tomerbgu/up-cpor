@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using static CPORLib.Tools.Options;
+using static CPORLib.Algorithms.PlannerBase;
 using Action = CPORLib.PlanningModel.PlanningAction;
 
 namespace CPORLib.Algorithms
@@ -50,20 +51,27 @@ namespace CPORLib.Algorithms
             {
                 if (domain.Uncertainties.Contains(p.Name))
                 {
+                    ////test 1: wrong off the bat
+                    //if (domain.Name == "unix")
+                    //{
+                    //    if (p.ToString().Contains("sub-dir root sub21"))
+                    //    {
+                    //        Console.WriteLine("negated this: " + p.ToString());
+                    //        predList.Add(p);
+                    //    }
+                    //}
+                    //test 2: Fail later on
                     if (domain.Name == "unix")
                     {
-                        if (p.ToString().Contains("sub-dir root sub21"))
-                            //if (p.ToString().Contains("file-in-dir my-file root"))
-                            //if (RandomGenerator.NextDouble() < 0.5)
-                            //if (p.ToString().Contains("file-in-dir my-file sub11") || p.ToString().Contains("file-in-dir my-file root"))
-                            {
+                        if (p.ToString().Contains("sub-dir root sub21") || p.ToString().Contains("file-in-dir my-file root"))
+                        {
                             Console.WriteLine("negated this: " + p.ToString());
                             predList.Add(p);
                         }
                     }
                     if (domain.Name == "doors")
                     {
-                        if (p.ToString().Contains("opened p3-") && RandomGenerator.NextDouble() < 0.5)
+                        if (p.ToString().Contains("opened p3-") && RandomGenerator.NextDouble() < 0.4)
                         {
                             Console.WriteLine("negated this: " + p.ToString());
                             predList.Add(p);
@@ -80,30 +88,42 @@ namespace CPORLib.Algorithms
                     }
                     if (domain.Name == "wumpus")
                     {
-                        if(p.ToString().Contains("safe p2-1"))
-                        //if (RandomGenerator.NextDouble() < 0.0 && p.Name == "safe" && !safe)
+                        bool Rand = true;
+                        if (Rand)
                         {
-                            Console.WriteLine("negated this: " + p.ToString());
-                            predList.Add(p);
-                            safe = true;
+                            if (RandomGenerator.NextDouble() < 0.4)
+                            {
+                                Console.WriteLine("negated this: " + p.ToString());
+                                predList.Add(p);
+                            }
                         }
-                        if (p.Name == "pit-at" && !pit)
+                        else
                         {
-                            Console.WriteLine("negated this: " + p.ToString());
-                            predList.Add(p);
-                            pit = true;
-                        }
-                        if (p.Name == "wumpus-at" && !wumpus)
-                        {
-                            Console.WriteLine("negated this: " + p.ToString());
-                            predList.Add(p);
-                            wumpus = true;
-                        }
-                        if (p.Name == "gold-at" && !gold && p.Negation)
-                        {
-                            Console.WriteLine("negated this: " + p.ToString());
-                            predList.Add(p);
-                            gold = true;
+                            if (p.ToString().Contains("safe p2-1"))
+                            //if (RandomGenerator.NextDouble() < 0.0 && p.Name == "safe" && !safe)
+                            {
+                                Console.WriteLine("negated this: " + p.ToString());
+                                predList.Add(p);
+                                safe = true;
+                            }
+                            if (p.Name == "pit-at" && !pit)
+                            {
+                                Console.WriteLine("negated this: " + p.ToString());
+                                predList.Add(p);
+                                pit = true;
+                            }
+                            if (p.Name == "wumpus-at" && !wumpus)
+                            {
+                                Console.WriteLine("negated this: " + p.ToString());
+                                predList.Add(p);
+                                wumpus = true;
+                            }
+                            if (p.Name == "gold-at" && !gold && p.Negation)
+                            {
+                                Console.WriteLine("negated this: " + p.ToString());
+                                predList.Add(p);
+                                gold = true;
+                            }
                         }
                     }
                 }
@@ -135,10 +155,24 @@ namespace CPORLib.Algorithms
                 {
                     CheckGoalReached = false;
                     //check if there is smarter way to do this
-                    CurrentState.m_bsInitialBelief.Observed.Remove(Problem.pGoal);
-                    CurrentState.Observed.Remove(Problem.pGoal);
-                    CurrentState.Hidden.Add(Problem.pGoal);
-                    //CurrentState.m_bsInitialBelief.Hidden.Add((CompoundFormula)Problem.Goal);
+                    IEnumerator<Predicate> en = CurrentState.Observed.GetEnumerator();
+                    en.MoveNext();
+                    while (en.Current != null)
+                    {
+                        if (en.Current.Name == Problem.pGoal.Name)
+                        {
+                            CurrentState.m_bsInitialBelief.Observed.Remove(en.Current);
+                            CurrentState.Observed.Remove(en.Current);
+                            CurrentState.Hidden.Add(en.Current);
+                            break;
+                        }
+                        en.MoveNext();
+                    }
+
+                    CompoundFormula cf = new CompoundFormula("or");
+                    cf.SimpleAddOperand(Problem.Goal);
+                    cf.SimpleAddOperand(Problem.Goal.Negate());
+                    CurrentState.m_bsInitialBelief.Hidden.Add(cf);
 
                     CurrentState.m_bsInitialBelief.Unknown.Add(Problem.pGoal.Canonical());
                 }
@@ -160,7 +194,6 @@ namespace CPORLib.Algorithms
                 else
                     bPreconditionFailure = true;
             }
-            //return ManualSolve(Domain, Problem, CurrentState);
             bool testing = false;
             if (testing)
             {
@@ -172,6 +205,11 @@ namespace CPORLib.Algorithms
                     if (ac.Preconditions == null || ac.Preconditions.IsTrue(CurrentState.Observed, false))
                         Console.WriteLine(i + ") " + ac.Name);
                 }
+            }
+            bool manual = false;
+            if (manual)
+            {
+                return ManualSolve(Domain, Problem, CurrentState);
             }
             List<string> lPlan = Plan(CurrentState, bPreconditionFailure, out bool bDeadEndReached, out State sChosen);
             if (lPlan == null || lPlan.Count ==0)
