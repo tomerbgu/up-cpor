@@ -290,13 +290,13 @@ namespace CPORLib.PlanningModel
         }
 
 
-        public Domain CreateTaggedDomain(Dictionary<string, ISet<Predicate>> dTags, Problem pCurrent, List<Formula> lDeadends)
+        public Domain CreateTaggedDomain(Dictionary<string, ISet<Predicate>> dTags, Problem pCurrent, List<Formula> lDeadends, bool addFakeActions)
         {
             if (HasNonDeterministicActions() && Options.UseOptions)
             {
                 Domain dDeterministic = RemoveNonDeterministicEffects();
 
-                return dDeterministic.CreateTaggedDomain(dTags, pCurrent, lDeadends);
+                return dDeterministic.CreateTaggedDomain(dTags, pCurrent, lDeadends, addFakeActions);
             }
 
             Domain dTagged = new Domain("K" + Name);
@@ -316,6 +316,18 @@ namespace CPORLib.PlanningModel
             List<Predicate> lPredicates = CreateTaggedPredicates();
             foreach (Predicate p in lPredicates)
                 dTagged.AddPredicate(p);
+            
+            ParametrizedPredicate vPred = new ParametrizedPredicate("verified");
+            vPred.AddParameter("?i", "pos");
+            dTagged.AddPredicate(vPred);
+            Predicate pK = vPred.Clone();
+            pK.Name = "K" + vPred.Name;
+            dTagged.AddPredicate(pK);
+
+            Predicate pKN = vPred.Clone();
+            pKN.Name = "KN" + vPred.Name;
+            dTagged.AddPredicate(pKN);
+
 
             //List<Predicate> lUncertainPredicates = CreateTaggedUncertainties();
             //foreach (Predicate p in lUncertainPredicates)
@@ -325,7 +337,13 @@ namespace CPORLib.PlanningModel
             List<PlanningAction> lAllActions = GetAllKnowledgeActions(dTags);
             foreach (PlanningAction a in lAllActions)
                 dTagged.AddAction(a);
-
+            
+            if (addFakeActions)
+            {
+                List<PlanningAction> lFakeActions = GetAllFakeActions(dTags);
+                foreach (PlanningAction a in lFakeActions)
+                    dTagged.AddAction(a);
+            }
 
             List<PlanningAction> lReasoningActions = CreateReasoningActions(dTags, pCurrent, lDeadends);
             foreach (PlanningAction a in lReasoningActions)
@@ -880,6 +898,38 @@ namespace CPORLib.PlanningModel
                 {
                     PlanningAction aKnowledge = a.AddTaggedConditions(dTags, m_lAlwaysKnown);
                     lActions.Add(aKnowledge);
+                }
+            }
+            return lActions;
+        }
+
+        private List<PlanningAction> GetAllFakeActions(Dictionary<string, ISet<Predicate>> dTags)
+        {
+            List<PlanningAction> lActions = new List<PlanningAction>();
+            foreach (String s in Uncertainties)
+            {
+                foreach (Predicate p in Predicates)
+                {
+                    if (p.Name == s)
+                    {
+                        ParametrizedAction a = new ParametrizedAction("Fake:Make-"+s);
+                        a.AddParameter("?i", "pos");
+                        a.AddParameter("?j", "pos");
+                        a.Preconditions = new CompoundFormula("and");
+                        a.Effects = new CompoundFormula("and");
+
+                        //TODO this is hard-coded atm
+                        a.AddPrecondition(Predicates[0]);
+                        a.AddPrecondition(Predicates[1]);
+                        ParametrizedPredicate notVerified = new ParametrizedPredicate("verified");
+                        notVerified.AddParameter("?j", "pos");
+                        //a.AddPrecondition(notVerified.Negate());
+                        ParametrizedPredicate pNew = new ParametrizedPredicate(p.Name);
+                        pNew.AddParameter("?j", "pos");
+                        a.AddEffect(pNew);
+                        PlanningAction aKnowledge = a.AddTaggedConditions(dTags, m_lAlwaysKnown);
+                        lActions.Add(aKnowledge);
+                    }
                 }
             }
             return lActions;

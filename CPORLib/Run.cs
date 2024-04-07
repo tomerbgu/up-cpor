@@ -107,7 +107,10 @@ namespace CPORLib
                     {
                         string sAction = sdr.GetAction();
                         if (sAction == null) //we are already at goalstate
+                        {
                             Console.Write("*");
+                            continue;
+                        }
                         string sObservation = sim.Apply(sAction);
                         bool bResult = sdr.SetObservation(sObservation);
                         Console.WriteLine(idx + ") Executed " + sAction + ", received " + sObservation);

@@ -322,14 +322,21 @@ namespace CPORLib.Algorithms
 
             if (!WriteAllKVariations || cTags == 1)
             {
-                lPlan = RunPlanner(dTagged, pTagged, -1);
+                try {
+                    lPlan = RunPlanner(dTagged, pTagged, -1);
+                }
+                catch (DeadendException e)
+                {
+                    Console.WriteLine(e.Message);
+                    pssCurrent.GetTaggedDomainAndProblemDE(DeadendStrategies.Lazy, bPreconditionFailure, out Domain dTaggedDE, out Problem pTaggedDE);
+                    lPlan = RunPlanner(dTaggedDE, pTaggedDE, -1);
+                }
                 if (lPlan == null)
                 {
                     Debug.WriteLine("Classical planner failed");
                     //ManualSolve(sPath);
                     return null;
                 }
-
 
             }
             
@@ -842,9 +849,9 @@ namespace CPORLib.Algorithms
             if (Options.Translation != Options.Translations.SDR)
                 throw new NotImplementedException();
 
-            domain = Problem.Domain.CreateTaggedDomain(dTags, Problem, null);
+            domain = Problem.Domain.CreateTaggedDomain(dTags, Problem, null, false);
 
-            problem = Problem.CreateTaggedProblem(domain, dTags, lObserved, dTags.Values.First(), lStates.First().FunctionValues, dsStrategy, false); //the first tag is the real state
+            problem = Problem.CreateTaggedProblem(domain, dTags, lObserved, dTags.Values.First(), lStates.First().FunctionValues, dsStrategy, false, null, false); //the first tag is the real state
         }
 
         /*

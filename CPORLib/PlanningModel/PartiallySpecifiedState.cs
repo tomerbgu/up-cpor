@@ -278,9 +278,9 @@ namespace CPORLib.PlanningModel
             deadEndList = new List<Formula>();
             if (lOrg != null)
             {
-                foreach (Formula daedend in lOrg)
+                foreach (Formula deadend in lOrg)
                 {
-                    deadEndList.Add(daedend);
+                    deadEndList.Add(deadend);
                 }
             }
         }
@@ -485,7 +485,9 @@ namespace CPORLib.PlanningModel
             int cRegressions = 0;
             while (pssCurrent.m_sPredecessor != null)
             {
-                fReduced = fCurrent.Reduce(pssCurrent.Observed);
+                //fReduced = fCurrent.Reduce(pssCurrent.Observed);
+                ISet<Predicate> filtered = new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Contains(p.Name)));
+                fReduced = fCurrent.Reduce(filtered);
                 if (fReduced.IsTrue(null))
                     return true;
                 if (fReduced.IsFalse(null))
@@ -497,26 +499,28 @@ namespace CPORLib.PlanningModel
                     //bool bChanged = false;
                     //fToRegress = ((CompoundFormula)fToRegress).RemoveNestedConjunction(out bChanged);
                 }
-                if (fToRegress.IsTrue(pssCurrent.Observed))
+                if (fToRegress.IsTrue(filtered))
                     return true;
-                if (fToRegress.IsFalse(pssCurrent.Observed))
+                if (fToRegress.IsFalse(filtered))
                     return false;
                 //TODO check if necessary
                 if (pssCurrent.GeneratingAction != null)
                 {
-                    Formula fRegressed = fToRegress.Regress(pssCurrent.GeneratingAction, pssCurrent.Observed);
+                    Formula fRegressed = fToRegress.Regress(pssCurrent.GeneratingAction, filtered);
                     fCurrent = fRegressed;
                 }
                     //Formula fRegressed = fToRegress.Regress(GeneratingAction);
                 cRegressions++;               
                 pssCurrent = pssCurrent.m_sPredecessor;
             }
-            fReduced = fCurrent.Reduce(pssCurrent.Observed);
-            if (fReduced.IsTrue(m_bsInitialBelief.Observed))
+            ISet<Predicate> filtered2 = new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Contains(p.Name)));
+            ISet<Predicate> filtered3 = new HashSet<Predicate>(m_bsInitialBelief.Observed.Where(p => !Problem.Domain.Uncertainties.Contains(p.Name)));
+            fReduced = fCurrent.Reduce(filtered2);
+            if (fReduced.IsTrue(filtered3))
                 return true;
-            if (fReduced.IsFalse(m_bsInitialBelief.Observed))
+            if (fReduced.IsFalse(filtered3))
                 return false;
-            return m_bsInitialBelief.ConsistentWith(fReduced, bCheckingActionPreconditions);
+            return m_bsInitialBelief.ConsistentWith(fReduced, bCheckingActionPreconditions, Verified);
             //m_bsInitialBelief.ApplyReasoning();
 
         }
@@ -1074,7 +1078,11 @@ namespace CPORLib.PlanningModel
 
         public Action GetAction(string sActionName)
         {
-            string sRevisedActionName = sActionName.Replace(Utilities.DELIMITER_CHAR, " ");
+            string sRevisedActionName;
+            if (sActionName.StartsWith("Fake:"))
+                sRevisedActionName = sActionName.Replace(Utilities.SplitString(sActionName, ' ')[0], "sense-door");
+            else
+                sRevisedActionName = sActionName.Replace(Utilities.DELIMITER_CHAR, " ");
             string[] aName = Utilities.SplitString(sRevisedActionName, ' ');
             Action a = Problem.Domain.GroundActionByName(aName);
             return a;
@@ -1817,7 +1825,8 @@ namespace CPORLib.PlanningModel
                 fWithObservation.AddOperand(GeneratingObservation);
             Formula fReduced = fWithObservation.Reduce(Observed);
              */
-            Formula fToRegress = f.Reduce(Observed);
+            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p => !Problem.Domain.Uncertainties.Contains(p.Name)));
+            Formula fToRegress = f.Reduce(filtered);
             if (fToRegress is CompoundFormula)
             {
                 bool bChanged = false;
@@ -2183,7 +2192,7 @@ namespace CPORLib.PlanningModel
                 pssCurrent = pssCurrent.Predecessor;
 
             }
-            return !m_bsInitialBelief.ConsistentWith(fCurrent, false);
+            return !m_bsInitialBelief.ConsistentWith(fCurrent, false, Verified);
         }
 
         public bool IsGoalState()
@@ -2250,6 +2259,20 @@ namespace CPORLib.PlanningModel
                 pssCurrent = pssCurrent.m_sPredecessor;
             }
             m_bsInitialBelief.GetTaggedDomainAndProblem(this, lActions, dsStrategy, bPreconditionFailure, out cTags, out dTagged, out pTagged);
+        }
+
+        public void GetTaggedDomainAndProblemDE(Options.DeadendStrategies dsStrategy, bool bPreconditionFailure,
+            out Domain dTagged, out Problem pTagged)
+        {
+            List<Action> lActions = new List<PlanningAction>();
+            PartiallySpecifiedState pssCurrent = this;
+            while (pssCurrent.m_sPredecessor != null)
+            {
+                if (pssCurrent.GeneratingAction != null)
+                    lActions.Insert(0, pssCurrent.GeneratingAction);
+                pssCurrent = pssCurrent.m_sPredecessor;
+            }
+            m_bsInitialBelief.GetTaggedDomainAndProblemDE(this, lActions, dsStrategy, bPreconditionFailure, out int cTags, out dTagged, out pTagged);
         }
 
         private State WriteTaggedDomainAndProblemDeadEnd(List<Action> lActions, List<Formula> lMaybeDeadends, DeadendStrategies dsStrategy, bool bPreconditionFailure, out int cTags, out MemoryStream msModels)

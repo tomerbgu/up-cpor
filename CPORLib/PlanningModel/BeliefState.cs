@@ -176,13 +176,15 @@ namespace CPORLib.PlanningModel
             return true;
         }
 
-        public bool ConsistentWith(Formula fOriginal, bool bCheckingActionPreconditions)
+        public bool ConsistentWith(Formula fOriginal, bool bCheckingActionPreconditions, ISet<Predicate> verified)
         {
+            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p =>
+                                        !Problem.Domain.Uncertainties.Contains(p.Name) || verified.Contains(p)));
 
-            Formula f = fOriginal.Reduce(Observed);
-            if (f.IsFalse(Observed))
+            Formula f = fOriginal.Reduce(filtered);
+            if (f.IsFalse(filtered))
                 return false;
-            if (f.IsTrue(Observed))
+            if (f.IsTrue(filtered))
                 return true;
 
             bool bValid = true;
@@ -231,7 +233,7 @@ namespace CPORLib.PlanningModel
                             }
                         }
                     }
-                    if(bKnown)
+                    if(bKnown && !Problem.Domain.Uncertainties.Contains(gp.Name))
                     {
                         if(!m_lObserved.Contains(gp) && !gp.Negation)
                         {
@@ -1816,7 +1818,7 @@ namespace CPORLib.PlanningModel
             if (Options.Translation == Options.Translations.SDR)
             {
 
-                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null);
+                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null, false);
 
             }
             else
@@ -1826,7 +1828,57 @@ namespace CPORLib.PlanningModel
             if (Options.Translation == Options.Translations.SDR)
             {
                 pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(), 
-                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure);
+                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, false);
+            }
+            else
+                throw new NotImplementedException();
+
+        }
+
+        public void GetTaggedDomainAndProblemDE(PartiallySpecifiedState pssCurrent, List<Action> lAppliedActions,
+            Options.DeadendStrategies dsStrategy, bool bPreconditionFailure,
+            out int cTags, out Domain dTagged, out Problem pTagged
+            )
+        {
+            cTags = 0;
+            List<ISet<Predicate>> lChosen = ChooseStateSet();
+            ChosenStates = lChosen;
+
+            dTagged = null;
+            pTagged = null;
+            if (lChosen == null)
+                return;
+
+            //BUGBUG;//We should cache the states, try to avoid this useless repetition
+            List<State> lStates = ApplyActions(lChosen, lAppliedActions);
+
+            if (lStates.Count == 0)
+            {
+                cTags = 1;
+                pTagged = Problem;
+                dTagged = Problem.Domain;
+                return;
+            }
+
+            HashSet<Predicate> lObserved = new HashSet<Predicate>();
+            Dictionary<string, ISet<Predicate>> dTags = GetTags(lStates, lObserved);
+
+            cTags = dTags.Count;
+
+            if (Options.Translation == Options.Translations.SDR)
+            {
+
+                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null, true);
+
+            }
+            else
+                throw new NotImplementedException();
+
+
+            if (Options.Translation == Options.Translations.SDR)
+            {
+                pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(),
+                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, false);
             }
             else
                 throw new NotImplementedException();
@@ -2025,7 +2077,7 @@ namespace CPORLib.PlanningModel
             else if (Options.Translation == Options.Translations.SDR)
             {
 
-                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null);
+                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null, false);
                 msDomain = dTagged.WriteSimpleDomain(true, false);
 
                 /*
@@ -2069,7 +2121,7 @@ namespace CPORLib.PlanningModel
                 msProblem = Problem.WriteKnowledgeProblem(new HashSet<Predicate>(pssCurrent.Observed), new HashSet<Predicate>(lStates[0].Predicates));
             else if (Options.Translation == Options.Translations.SDR)
             {
-                Problem pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(), lStates.First().FunctionValues, dsStrategy, false);
+                Problem pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(), lStates.First().FunctionValues, dsStrategy, false, pssCurrent.Verified, false);
                 msProblem = pTagged.WriteSimpleProblem(null);
 
                 //Parser parser = new Parser();
@@ -3155,10 +3207,11 @@ namespace CPORLib.PlanningModel
             }
 
             Formula fFinal = null;
+            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p => !Problem.Domain.Uncertainties.Contains(p.Name)));
             if (lCurrentFormulas.Count == 0)
                 return hsModifiedClauses;
             if (lCurrentFormulas.Count == 1)
-                fFinal = lCurrentFormulas[0].Reduce(Observed);
+                fFinal = lCurrentFormulas[0].Reduce(filtered);
             else
             {
                 CompoundFormula cf = new CompoundFormula("and");

@@ -902,7 +902,7 @@ namespace CPORLib.PlanningModel
 
         public Problem CreateTaggedProblem(Domain dTagged, Dictionary<string, ISet<Predicate>> dTags, ISet<Predicate> lObserved,
                                         ISet<Predicate> lTrueState, Dictionary<string, double> dFunctionValues, Options.DeadendStrategies dsStrategy,
-                                        bool bPreconditionFailure)
+                                        bool bPreconditionFailure, ISet<Predicate> verified, bool deadEnds)
         {
             Problem problem = new Problem("K" + Name, dTagged);
 
@@ -937,6 +937,38 @@ namespace CPORLib.PlanningModel
                     problem.AddKnown(gpK);
                 if (!gp.Negation)
                     problem.AddKnown(gp);
+            }
+            if (deadEnds)
+            {
+                foreach (Constant c in Domain.Constants)
+                {
+                    bool found = false;
+                    foreach (GroundedPredicate gpVer in verified)
+                    {
+                        if (gpVer.Name == c.Name)
+                        {
+                            GroundedPredicate gp = new GroundedPredicate("verified", false);
+                            gp.AddConstant(c);
+                            ParametrizedPredicate pp = new ParametrizedPredicate("verified");
+                            pp.AddParameter(c.Name, "pos");
+                            gp.Bind(pp);
+                            problem.AddKnown(gp);
+                            found = true;
+                        }
+                        if (found)
+                            break;
+                    }
+                    if (!found)
+                    {
+                        GroundedPredicate gp = new GroundedPredicate("verified", true);
+                        gp.AddConstant(c);
+                        ParametrizedPredicate pp = new ParametrizedPredicate("verified");
+                        pp.AddParameter(c.Name, "pos");
+                        gp.Bind(pp);
+                        problem.AddKnown(gp);
+                    }
+                }
+                
             }
             foreach (GroundedPredicate gp in lTrueState)
             {

@@ -71,7 +71,7 @@ namespace CPORLib.Algorithms
                     }
                     if (domain.Name == "doors")
                     {
-                        if (p.ToString().Contains("opened p3-") && RandomGenerator.NextDouble() < 0.4)
+                        if (p.ToString().StartsWith("(opened p3-"))
                         {
                             Console.WriteLine("negated this: " + p.ToString());
                             predList.Add(p);
@@ -88,10 +88,10 @@ namespace CPORLib.Algorithms
                     }
                     if (domain.Name == "wumpus")
                     {
-                        bool Rand = true;
+                        bool Rand = false;
                         if (Rand)
                         {
-                            if (RandomGenerator.NextDouble() < 0.4)
+                            if (RandomGenerator.NextDouble() < 0.3)
                             {
                                 Console.WriteLine("negated this: " + p.ToString());
                                 predList.Add(p);
@@ -99,13 +99,13 @@ namespace CPORLib.Algorithms
                         }
                         else
                         {
-                            if (p.ToString().Contains("safe p2-1"))
-                            //if (RandomGenerator.NextDouble() < 0.0 && p.Name == "safe" && !safe)
-                            {
-                                Console.WriteLine("negated this: " + p.ToString());
-                                predList.Add(p);
-                                safe = true;
-                            }
+                            //if (p.ToString().Contains("safe p2-1"))
+                            ////if (RandomGenerator.NextDouble() < 0.0 && p.Name == "safe" && !safe)
+                            //{
+                            //    Console.WriteLine("negated this: " + p.ToString());
+                            //    predList.Add(p);
+                            //    safe = true;
+                            //}
                             if (p.Name == "pit-at" && !pit)
                             {
                                 Console.WriteLine("negated this: " + p.ToString());
@@ -215,7 +215,10 @@ namespace CPORLib.Algorithms
             if (lPlan == null || lPlan.Count ==0)
             {
                 Error = "Could not plan for the current state";
-                return null;
+                //TODO how to separate other cases from deadends
+                //add fake open-door action
+                return GetAction();
+                //return null;
             }
             FutureActions = lPlan;
             NextActionIndex = 0;
