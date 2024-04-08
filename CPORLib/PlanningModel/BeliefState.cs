@@ -1878,7 +1878,7 @@ namespace CPORLib.PlanningModel
             if (Options.Translation == Options.Translations.SDR)
             {
                 pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(),
-                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, false);
+                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, true);
             }
             else
                 throw new NotImplementedException();

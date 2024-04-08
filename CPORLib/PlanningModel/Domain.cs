@@ -317,8 +317,9 @@ namespace CPORLib.PlanningModel
             foreach (Predicate p in lPredicates)
                 dTagged.AddPredicate(p);
             
-            ParametrizedPredicate vPred = new ParametrizedPredicate("verified");
+            ParametrizedPredicate vPred = new ParametrizedPredicate("verified-open");
             vPred.AddParameter("?i", "pos");
+            List<Argument> lParams = new List<Argument>(vPred.Parameters);
             dTagged.AddPredicate(vPred);
             Predicate pK = vPred.Clone();
             pK.Name = "K" + vPred.Name;
@@ -328,13 +329,18 @@ namespace CPORLib.PlanningModel
             pKN.Name = "KN" + vPred.Name;
             dTagged.AddPredicate(pKN);
 
-
+            ParametrizedPredicate ppGiven = new ParametrizedPredicate("KGiven" + vPred.Name);
+            foreach (Argument param in lParams)
+                ppGiven.AddParameter(param);
+            ppGiven.AddParameter(new Parameter(Utilities.TAG, Utilities.TAG_PARAMETER));
+            ppGiven.AddParameter(new Parameter(Utilities.VALUE, Utilities.VALUE_PARAMETER));
+            dTagged.AddPredicate(ppGiven);
             //List<Predicate> lUncertainPredicates = CreateTaggedUncertainties();
             //foreach (Predicate p in lUncertainPredicates)
             //    dTagged.AddUncertainty(p);
 
             List<Predicate> lAdditionalPredicates = new List<Predicate>();
-            List<PlanningAction> lAllActions = GetAllKnowledgeActions(dTags);
+            List<PlanningAction> lAllActions = GetAllKnowledgeActions(dTags, addFakeActions);
             foreach (PlanningAction a in lAllActions)
                 dTagged.AddAction(a);
             
@@ -881,16 +887,27 @@ namespace CPORLib.PlanningModel
             sw.WriteLine();
         }
 
-        public List<PlanningAction> GetAllKnowledgeActions(Dictionary<string, ISet<Predicate>> dTags)
+        public List<PlanningAction> GetAllKnowledgeActions(Dictionary<string, ISet<Predicate>> dTags, bool addVerifiedEffect)
         {
             List<PlanningAction> lActions = new List<PlanningAction>();
             foreach (PlanningAction a in Actions)
             {
+                if (addVerifiedEffect)
+                {
+                    ParametrizedPredicate verified = new ParametrizedPredicate("verified-open");
+                    verified.AddParameter("?j", "pos");
+                    if (a.Effects == null)
+                    {
+                        a.Effects = new CompoundFormula("and");
+                    }
+                    a.AddEffect(verified);
+
+                }
                 if (a.Effects == null & a.Observe != null)
                 {
                     PlanningAction aObserveTrue = a.NonConditionalObservationTranslation(dTags, m_lAlwaysKnown, true);
-                    lActions.Add(aObserveTrue);
                     PlanningAction aObserveFalse = a.NonConditionalObservationTranslation(dTags, m_lAlwaysKnown, false);
+                    lActions.Add(aObserveTrue);
                     lActions.Add(aObserveFalse);
                 }
 
@@ -921,12 +938,17 @@ namespace CPORLib.PlanningModel
                         //TODO this is hard-coded atm
                         a.AddPrecondition(Predicates[0]);
                         a.AddPrecondition(Predicates[1]);
-                        ParametrizedPredicate notVerified = new ParametrizedPredicate("verified");
-                        notVerified.AddParameter("?j", "pos");
-                        //a.AddPrecondition(notVerified.Negate());
+                        ParametrizedPredicate verified = new ParametrizedPredicate("verified-open");
+                        verified.AddParameter("?j", "pos");
+                        a.AddPrecondition(verified.Negate());
+                        //should not be necessary
+                        //ParametrizedPredicate notOpened = new ParametrizedPredicate("opened");
+                        //notOpened.AddParameter("?j", "pos");
+                        //a.AddPrecondition(notOpened.Negate());
                         ParametrizedPredicate pNew = new ParametrizedPredicate(p.Name);
                         pNew.AddParameter("?j", "pos");
                         a.AddEffect(pNew);
+                        //a.AddEffect(verified);
                         PlanningAction aKnowledge = a.AddTaggedConditions(dTags, m_lAlwaysKnown);
                         lActions.Add(aKnowledge);
                     }
@@ -1723,7 +1745,6 @@ namespace CPORLib.PlanningModel
             List<Predicate> lTaggedPredicates = new List<Predicate>();
 
             lTaggedPredicates.Add(Utilities.Observed);
-            //var filteredItems = Predicates.Where(p => !Uncertainties.Contains(p.Name));
             foreach (Predicate pOrg in Predicates)
             {
                 List<Argument> lParams = new List<Argument>();
