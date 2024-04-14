@@ -768,8 +768,8 @@ namespace CPORLib.LogicalUtilities
             {
                 if (f is PredicateFormula)
                 {
-                    if (!lPredicates.Contains(((PredicateFormula)f).Predicate))
-                        cfNew.SimpleAddOperand(f);
+                    if (!lPredicates.Select(obj=>obj.Name).Contains(((PredicateFormula)f).Predicate.Name))//Assume names are unique
+                        cfNew.SimpleAddOperand(f);                      
                 }
                 else
                     cfNew.SimpleAddOperand(((CompoundFormula)f).RemovePredicates(lPredicates));

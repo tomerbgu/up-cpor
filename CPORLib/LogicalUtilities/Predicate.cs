@@ -173,5 +173,13 @@ namespace CPORLib.LogicalUtilities
             pClone.Name = "KW" + p.Name;
             return pClone;
         }
+
+        public Predicate CreateVerifiedPredicate()
+        {
+            Predicate vPred = Clone();
+            vPred.Negation = false;
+            vPred.Name = "verified-" + vPred.Name;
+            return vPred;
+        }
     }
 }

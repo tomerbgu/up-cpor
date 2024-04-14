@@ -30,26 +30,12 @@ namespace CPORLib.Algorithms
         {
             Options.ComputeCompletePlanTree = false;
             Options.AddAllKnownToGiven = true; //this is needed in, e.g., medpks010
-            //Debug.WriteLine("Started online replanning for " + Domain.Name + ", " + DateTime.Now);
-            //no deadend support for now
             BeliefState bsInitial = problem.GetInitialBelief();
-
-
-
             HashSet<Predicate> predList = new HashSet<Predicate>();
-            /*
-            //ISet<string> lies = new HashSet<string>();
-            //lies.Add("(not (opened p2-3))");
-            ////lies.Add("(not (free-up ))");
-            //lies.Add("(opened p1-4)");
-            ////lies.Add("(at p1-3)");
-            ////lies.Add("(not (opened p2-3))");
-            ////lies.Add("(adj p1-3 p2-3)");
-            */
             bool safe=false, wumpus = false, gold = false, pit = false;
             foreach (Predicate p in bsInitial.Observed)
             {
-                if (domain.Uncertainties.Contains(p.Name))
+                if (domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name))
                 {
                     ////test 1: wrong off the bat
                     //if (domain.Name == "unix")
@@ -63,7 +49,7 @@ namespace CPORLib.Algorithms
                     //test 2: Fail later on
                     if (domain.Name == "unix")
                     {
-                        if (p.ToString().Contains("sub-dir root sub21") || p.ToString().Contains("file-in-dir my-file root"))
+                        if (p.ToString().Contains("sub-dir root sub21") || p.ToString().Contains("file-in-dir my-file root") || p.ToString().StartsWith("(sub-dir root"))
                         {
                             Console.WriteLine("negated this: " + p.ToString());
                             predList.Add(p);

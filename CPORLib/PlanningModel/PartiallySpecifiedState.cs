@@ -486,7 +486,7 @@ namespace CPORLib.PlanningModel
             while (pssCurrent.m_sPredecessor != null)
             {
                 //fReduced = fCurrent.Reduce(pssCurrent.Observed);
-                ISet<Predicate> filtered = new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Contains(p.Name)));
+                ISet<Predicate> filtered = new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
                 fReduced = fCurrent.Reduce(filtered);
                 if (fReduced.IsTrue(null))
                     return true;
@@ -513,8 +513,8 @@ namespace CPORLib.PlanningModel
                 cRegressions++;               
                 pssCurrent = pssCurrent.m_sPredecessor;
             }
-            ISet<Predicate> filtered2 = new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Contains(p.Name)));
-            ISet<Predicate> filtered3 = new HashSet<Predicate>(m_bsInitialBelief.Observed.Where(p => !Problem.Domain.Uncertainties.Contains(p.Name)));
+            ISet<Predicate> filtered2 = new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
+            ISet<Predicate> filtered3 = new HashSet<Predicate>(m_bsInitialBelief.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
             fReduced = fCurrent.Reduce(filtered2);
             if (fReduced.IsTrue(filtered3))
                 return true;
@@ -541,7 +541,7 @@ namespace CPORLib.PlanningModel
             ISet<Predicate> pred = a.Preconditions.GetAllPredicates();
             Formula toRegress = a.Preconditions.Negate();
             ISet<Predicate> verified = new GenericArraySet<Predicate>();
-            var filteredPred = pred.Where(p => Problem.Domain.Uncertainties.Contains(p.Name));
+            var filteredPred = pred.Where(p => Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name));
             CompoundFormula cf;//, cfAll = new CompoundFormula("or");
             GroundedPredicate pCanonical;
             foreach (Predicate p in filteredPred)
@@ -1826,7 +1826,7 @@ namespace CPORLib.PlanningModel
                 fWithObservation.AddOperand(GeneratingObservation);
             Formula fReduced = fWithObservation.Reduce(Observed);
              */
-            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p => !Problem.Domain.Uncertainties.Contains(p.Name)));
+            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
             Formula fToRegress = f.Reduce(filtered);
             if (fToRegress is CompoundFormula)
             {
@@ -2276,7 +2276,7 @@ namespace CPORLib.PlanningModel
             m_bsInitialBelief.GetTaggedDomainAndProblemDE(this, lActions, dsStrategy, bPreconditionFailure, out int cTags, out dTagged, out pTagged);
         }
 
-        public void GetModifiedTaggedDomainAndProblem(Options.DeadendStrategies dsStrategy, bool bPreconditionFailure, PredicateFormula newGoal,
+        public void GetModifiedTaggedDomainAndProblem(Options.DeadendStrategies dsStrategy, bool bPreconditionFailure, String newGoal,
             out Domain dTagged, out Problem pTagged)
         {
             List<Action> lActions = new List<PlanningAction>();

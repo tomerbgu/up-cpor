@@ -20,7 +20,7 @@ namespace CPORLib.PlanningModel
         public List<PlanningAction> Actions { get; set; }
         public List<Constant> Constants { get; protected set; }
         public List<Predicate> Predicates { get; protected set; }
-        public List<string> Uncertainties { get; protected set; }
+        public List<Predicate> Uncertainties { get; protected set; }
 
         public List<string> Functions { get; protected set; }
         public List<string> m_lAlwaysKnown { get; protected set; }
@@ -44,7 +44,7 @@ namespace CPORLib.PlanningModel
             Actions = new List<PlanningAction>();
             Constants = new List<Constant>();
             Predicates = new List<Predicate>();
-            Uncertainties = new List<string>();
+            Uncertainties = new List<Predicate>();
             Types = new List<string>();
             m_lAlwaysKnown = new List<string>();
             m_lAlwaysKnown.Add("increase");
@@ -175,7 +175,7 @@ namespace CPORLib.PlanningModel
                 p = ppNew;
             }
             Predicates.Add(p);
-            Uncertainties.Add(p.Name);
+            Uncertainties.Add(p);
             m_lAlwaysKnown.Add(p.Name);
             m_lAlwaysConstant.Add(p.Name);
         }
@@ -894,32 +894,34 @@ namespace CPORLib.PlanningModel
         public List<PlanningAction> GetAllFakeActions()
         {
             List<PlanningAction> lActions = new List<PlanningAction>();
-            foreach (String s in Uncertainties)
+            foreach (Predicate p in Uncertainties)
             {
-                foreach (Predicate p in Predicates)
+                ParametrizedAction a = new ParametrizedAction("Make:"+p.Name);
+                if (p is ParametrizedPredicate)
                 {
-                    if (p.Name == s)
+                    ParametrizedPredicate pp = (ParametrizedPredicate)p;
+                    foreach(Parameter par in pp.Parameters)
                     {
-                        ParametrizedAction a = new ParametrizedAction("Make:"+s);
-                        a.AddParameter("?i", "pos");
-                        //a.AddParameter("?j", "pos");
-                        a.Preconditions = new CompoundFormula("and");
-                        CompoundFormula andEffect = new CompoundFormula("and");
-
-                        ParametrizedPredicate verified = new ParametrizedPredicate("verified-"+s);
-                        verified.AddParameter("?i", "pos");
-                        a.AddPrecondition(verified.Negate());
-                        
-
-                        ParametrizedPredicate pp2 = new ParametrizedPredicate(s);
-                        pp2.AddParameter("?i", "pos");
-                        andEffect.AddOperand(pp2);
-
-                        a.Effects = andEffect;
-
-                        lActions.Add(a);
+                        a.AddParameter(par);
                     }
                 }
+                else
+                    throw new Exception();
+                a.Preconditions = new CompoundFormula("and");
+                Predicate verified = p.CreateVerifiedPredicate();
+                a.AddPrecondition(verified.Negate());
+
+                CompoundFormula andEffect = new CompoundFormula("and");
+                ParametrizedPredicate pp2 = new ParametrizedPredicate(p.Name);
+                foreach (Parameter par in a.Parameters)
+                {
+                    pp2.AddParameter(par);
+                }
+                andEffect.AddOperand(pp2);
+
+                a.Effects = andEffect;
+
+                lActions.Add(a);
             }
             return lActions;
         }
@@ -1825,7 +1827,7 @@ namespace CPORLib.PlanningModel
             List<Predicate> lTaggedUncertainPredicates = new List<Predicate>();
 
             //lTaggedPredicates.Add(Utilities.Observed);
-            var filteredItems = Predicates.Where(p => Uncertainties.Contains(p.Name));
+            var filteredItems = Predicates.Where(p => Uncertainties.Select(obj => obj.Name).Contains(p.Name));
             foreach (Predicate pOrg in filteredItems)
             {
                 List<Argument> lParams = new List<Argument>();
@@ -3219,7 +3221,7 @@ namespace CPORLib.PlanningModel
                         ISet<Predicate> lPredicates = a.Observe.GetAllPredicates();
                         foreach (Predicate p in lPredicates)
                         {
-                            if (m_lAlwaysKnown.Contains(p.Name))// && !Uncertainties.Contains(p.Name)
+                            if (m_lAlwaysKnown.Contains(p.Name))// && !Uncertainties.Select(obj => obj.Name).Contains(p.Name)
                             {
                                 m_lAlwaysKnown.Remove(p.Name);
                             }

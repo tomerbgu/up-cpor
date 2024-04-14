@@ -945,36 +945,32 @@ namespace CPORLib.PlanningModel
 
             if(dFunctionValues != null && dFunctionValues.Count > 0)
                 throw new NotImplementedException();
-            //deadEnds = Domain.Predicates.Where(p => p.Name == "verified-opened").Count() > 0;
             if (deadEnds)
             {
-                foreach (String s in Domain.Uncertainties)
+                foreach (Predicate uncertainPred in Domain.Uncertainties)
                 {
-                    foreach (Constant c in Domain.Constants)
+                    var uncertainKnown = Known.Where(p => p.Name == uncertainPred.Name);
+                    var uncertainVerified = verified.Where(p => p.Name == uncertainPred.Name);
+                    foreach (GroundedPredicate gpVer in uncertainVerified)
+                    {
+                        Predicate gp = gpVer.CreateVerifiedPredicate();
+                        problem.AddKnown(gp);
+                        lObserved.Add(gp);
+                    }
+                    foreach (Predicate p in uncertainKnown)
                     {
                         bool found = false;
-                        foreach (GroundedPredicate gpVer in verified)
+                        foreach (GroundedPredicate gpVer in uncertainVerified)
                         {
-                            if (gpVer.Name==s && gpVer.Constants[0].Name == c.Name)
+                            if (gpVer.Equals(p) || gpVer.Equals(p.Negate()))
                             {
-                                GroundedPredicate gp = new GroundedPredicate("verified-" + s, false);
-                                gp.AddConstant(c);
-                                ParametrizedPredicate pp = new ParametrizedPredicate("verified-" + s);
-                                pp.AddParameter(c.Name, "pos");
-                                gp.Bind(pp);
-                                problem.AddKnown(gp);
-                                lObserved.Add(gp);
                                 found = true;
                                 break;
                             }
                         }
                         if (!found)
                         {
-                            GroundedPredicate gp = new GroundedPredicate("verified-" + s, true);
-                            gp.AddConstant(c);
-                            ParametrizedPredicate pp = new ParametrizedPredicate("verified-" + s);
-                            pp.AddParameter(c.Name, "pos");
-                            gp.Bind(pp);
+                            GroundedPredicate gp = (GroundedPredicate)p.CreateVerifiedPredicate().Negate();
                             lObserved.Add(gp);
                             problem.AddKnown(gp);
                         }

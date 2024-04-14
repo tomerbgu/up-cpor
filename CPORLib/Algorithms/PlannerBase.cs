@@ -347,29 +347,17 @@ namespace CPORLib.Algorithms
                         {
                             if (step.StartsWith("Make:"))
                             {
-                                //change Goal to verified-opened
-                                CompoundFormula andGoal = new CompoundFormula("and");
-                                String newGoal = step.Replace("Make:", "verified-");
-                                String[] vars = newGoal.Split(' ');
-                                GroundedPredicate newpGoal = new GroundedPredicate(vars[0], false);
-                                newpGoal.AddConstant(new Constant("pos", vars[1]));
-                                ParametrizedPredicate pp = new ParametrizedPredicate(vars[0]);
-                                pp.AddParameter(vars[1], "pos");
-                                newpGoal.Bind(pp);
-
                                 Formula oldGoal = Problem.Goal;
 
-                                pssCurrent.GetModifiedTaggedDomainAndProblem(DeadendStrategies.Lazy, bPreconditionFailure, new PredicateFormula(newpGoal), out Domain dTaggedModified, out Problem pTaggedModified);
+                                pssCurrent.GetModifiedTaggedDomainAndProblem(DeadendStrategies.Lazy, false, step, out Domain dTaggedModified, out Problem pTaggedModified);
 
                                 lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
 
                                 Problem.Goal = oldGoal;
 
-                                foreach (String s in Problem.Domain.Uncertainties)
+                                foreach (Predicate p in Problem.Domain.Uncertainties)
                                 {
-                                    ParametrizedPredicate vPred = new ParametrizedPredicate("verified-" + s);
-                                    vPred.AddParameter("?j", "pos");
-                                    Problem.Domain.RemoveFakePredicate(vPred);
+                                    Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
                                 }
                                 break;
                             }
@@ -391,11 +379,9 @@ namespace CPORLib.Algorithms
 
         private void RemoveInjectedPredicates()
         {
-            foreach (String s in Problem.Domain.Uncertainties)
+            foreach (Predicate p in Problem.Domain.Uncertainties)
             {
-                ParametrizedPredicate vPred = new ParametrizedPredicate("verified-" + s);
-                vPred.AddParameter("?j", "pos");
-                Problem.Domain.RemoveFakePredicate(vPred);
+                Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
             }
             List<PlanningAction> actionsToRemove = new List<PlanningAction>();
             foreach (PlanningAction pa in Problem.Domain.Actions)

@@ -179,7 +179,7 @@ namespace CPORLib.PlanningModel
         public bool ConsistentWith(Formula fOriginal, bool bCheckingActionPreconditions, ISet<Predicate> verified)
         {
             ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p =>
-                                        !Problem.Domain.Uncertainties.Contains(p.Name) || verified.Contains(p)));
+                                        !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name) || verified.Contains(p)));
 
             Formula f = fOriginal.Reduce(filtered);
             if (f.IsFalse(filtered))
@@ -233,7 +233,7 @@ namespace CPORLib.PlanningModel
                             }
                         }
                     }
-                    if(bKnown && !Problem.Domain.Uncertainties.Contains(gp.Name))
+                    if(bKnown && !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(gp.Name))
                     {
                         if(!m_lObserved.Contains(gp) && !gp.Negation)
                         {
@@ -1834,27 +1834,68 @@ namespace CPORLib.PlanningModel
                 throw new NotImplementedException();
 
         }
-
         private List<PlanningAction> ModifyDomainBeforeStateSelection(bool addActions)
         {
-            foreach (String s in Problem.Domain.Uncertainties) {
-                ParametrizedPredicate vPred = new ParametrizedPredicate("verified-"+s);
-                vPred.AddParameter("?j", "pos");
-                Problem.Domain.AddPredicate(vPred);
+            foreach (Predicate p in Problem.Domain.Uncertainties) {
+                Problem.Domain.AddPredicate(p.CreateVerifiedPredicate());
             }
             foreach (PlanningAction a in Problem.Domain.Actions)
             {
-                foreach (String s in Problem.Domain.Uncertainties)
+                foreach (Predicate p in Problem.Domain.Uncertainties)
                 {
-                    //TODO when is this relevant?
-                    ParametrizedAction aParam = (ParametrizedAction)a;
-                    ParametrizedPredicate verified = new ParametrizedPredicate("verified-" + s);
-                    verified.AddParameter(aParam.Parameters[aParam.Parameters.Count() - 1].Name, "pos");
-                    if (a.Effects == null)
+                    //TODO when is this relevant? -Go through all preconditions, effects, and observations.
+                    //ParametrizedAction aParam = (ParametrizedAction)a;
+                    if (a.Effects != null)
                     {
-                        a.Effects = new CompoundFormula("and");
+                        foreach (Predicate pEffect in a.Effects.GetAllPredicates())
+                        {
+                            if (p.Name == pEffect.Name)
+                            {
+                                Predicate verified = pEffect.CreateVerifiedPredicate();
+
+                                //verified.AddParameter(aParam.Parameters[aParam.Parameters.Count() - 1].Name, "pos");
+                                if (a.Effects == null)
+                                {
+                                    a.Effects = new CompoundFormula("and");
+                                }
+                                a.AddEffect(verified);
+                            }
+                        }
                     }
-                    a.AddEffect(verified);
+                    if (a.Preconditions != null)
+                    {
+                        foreach (Predicate pEffect in a.Preconditions.GetAllPredicates())
+                        {
+                            if (p.Name == pEffect.Name)
+                            {
+                                Predicate verified = pEffect.CreateVerifiedPredicate();
+
+                                //verified.AddParameter(aParam.Parameters[aParam.Parameters.Count() - 1].Name, "pos");
+                                if (a.Effects == null)
+                                {
+                                    a.Effects = new CompoundFormula("and");
+                                }
+                                a.AddEffect(verified);
+                            }
+                        }
+                    }
+                    if (a.Observe != null)
+                    {
+                        foreach (Predicate pEffect in a.Observe.GetAllPredicates())
+                        {
+                            if (p.Name == pEffect.Name)
+                            {
+                                Predicate verified = pEffect.CreateVerifiedPredicate();
+
+                                //verified.AddParameter(aParam.Parameters[aParam.Parameters.Count() - 1].Name, "pos");
+                                if (a.Effects == null)
+                                {
+                                    a.Effects = new CompoundFormula("and");
+                                }
+                                a.AddEffect(verified);
+                            }
+                        }
+                    }
                 }
             }
             if (addActions)
@@ -1869,14 +1910,16 @@ namespace CPORLib.PlanningModel
 
         private void ModifyProblemBeforeStateSelection(PartiallySpecifiedState pssCurrent)
         {
-            foreach (String s in Problem.Domain.Uncertainties)
+            foreach (Predicate s in Problem.Domain.Uncertainties)
             {
-                foreach (Constant c in Problem.Domain.Constants)
+                var uncertainObserved = Observed.Where(p => p.Name == s.Name);
+                var uncertainVerified = pssCurrent.Verified.Where(p => p.Name == s.Name);
+                foreach (Predicate p in uncertainObserved)
                 {
                     bool found = false;
-                    foreach (GroundedPredicate gpVer in pssCurrent.Verified)
+                    foreach (GroundedPredicate gpVer in uncertainVerified)
                     {
-                        if (gpVer.Name==s && gpVer.Constants[0].Name == c.Name)
+                        if (gpVer.Equals(p))
                         {
                             found = true;
                             break;
@@ -1884,35 +1927,17 @@ namespace CPORLib.PlanningModel
                     }
                     if (!found)
                     {
-                        GroundedPredicate gp2 = new GroundedPredicate(s, true);
-                        gp2.AddConstant(c);
-                        ParametrizedPredicate pp2 = new ParametrizedPredicate(s);
-                        pp2.AddParameter(c.Name, "pos");
-                        gp2.Bind(pp2);
-                        bool neg1 = Observed.Remove(gp2);
-                        bool neg2 = Problem.Known.Remove(gp2);
-
-                        //Observed.Remove(gp2.Negate());
-                        //Problem.Known.Remove(gp2.Negate());
+                        bool neg1 = Observed.Remove(p);
+                        bool neg2 = Problem.Known.Remove(p);
                         if (neg1 || neg2)
                         {
-                            Unknown.Add(gp2.Canonical());
-                            Problem.Unknown.Add(gp2.Canonical());
+                            Unknown.Add(p.Canonical());
+                            Problem.Unknown.Add(p.Canonical());
                             CompoundFormula orHidden = new CompoundFormula("or");
-                            orHidden.AddOperand(gp2);
-                            orHidden.SimpleAddOperand(gp2.Negate());
-
-                            //Problem.AddHidden(orHidden);
+                            orHidden.AddOperand(p);
+                            orHidden.SimpleAddOperand(p.Negate());
                             m_lHiddenFormulas.Add(orHidden);
                         }
-                        //if (onlyProblem && neg)
-                        //{
-                        //    foreach (KeyValuePair<string, ISet<Predicate>> p in dTags)
-                        //    {
-                        //        gp2 = (GroundedPredicate)gp2.Negate();
-                        //        dTags[p.Key].Add(gp2);
-                        //    }
-                        //}
                     }
                 }
             }
@@ -1979,7 +2004,7 @@ namespace CPORLib.PlanningModel
             if (Options.Translation == Options.Translations.SDR)
             {
                 pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(),
-                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, !modifyProblemBeforeStateSelection);
+                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, modifyDomainBeforeStateSelection);
             }
             else
                 throw new NotImplementedException();
@@ -2002,12 +2027,28 @@ namespace CPORLib.PlanningModel
 
         public void GetModifiedTaggedDomainAndProblem(PartiallySpecifiedState pssCurrent, List<Action> lAppliedActions,
             Options.DeadendStrategies dsStrategy, bool bPreconditionFailure,
-            PredicateFormula newGoal, out Domain dTagged, out Problem pTagged
+            String newGoal, out Domain dTagged, out Problem pTagged
             )
         {
             int cTags = 0;
-            Problem.Goal = newGoal;
             ModifyDomainBeforeStateSelection(false);
+            //change Goal to verified-opened
+            CompoundFormula andGoal = new CompoundFormula("and");
+            newGoal = newGoal.Replace("Make:", "verified-");
+            String[] vars = newGoal.Split(' ');
+            ParametrizedPredicate pp = (ParametrizedPredicate)Problem.Domain.Predicates.FirstOrDefault(obj => obj.Name == vars[0]);
+            Dictionary<Parameter, Constant> dBindings = new Dictionary<Parameter, Constant>();
+
+            int i = 1;
+            foreach (Parameter p in pp.Parameters)
+            {
+                dBindings[p] = new Constant(p.Type, vars[i]);
+                i++;
+            }
+            GroundedPredicate newPredicateGoal = pp.Ground(dBindings);
+            
+
+            Problem.Goal = new PredicateFormula(newPredicateGoal);
 
             List<ISet<Predicate>> lChosen = ChooseStateSet();
             ChosenStates = lChosen;
@@ -3375,7 +3416,7 @@ namespace CPORLib.PlanningModel
             }
 
             Formula fFinal = null;
-            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p => !Problem.Domain.Uncertainties.Contains(p.Name)));
+            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
             if (lCurrentFormulas.Count == 0)
                 return hsModifiedClauses;
             if (lCurrentFormulas.Count == 1)
