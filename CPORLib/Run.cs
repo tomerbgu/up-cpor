@@ -92,7 +92,7 @@ namespace CPORLib
 
             Options.TagsCount = 2;
             //Options.SDR_OBS = true;
-
+            Options.InjectedDeadendStrategy = Options.InjectedDeadendStrategies.ProblemModification;
 
             if (bOnline)
             {

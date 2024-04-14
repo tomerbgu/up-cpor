@@ -122,22 +122,25 @@ namespace CPORLib.PlanningModel
                     lConditions.Add(cfEffects);
                     return;
                 }
-                if (cfEffects.Operator != "and")
-                    throw new NotImplementedException();
-                foreach (Formula fSub in cfEffects.Operands)
+                //if (cfEffects.Operator != "and")
+                //    throw new NotImplementedException();
+                if (cfEffects.Operator == "and")
                 {
-                    if (fSub is PredicateFormula)
-                        lObligatory.Add(fSub);
-                    else if (fSub is CompoundFormula)
+                    foreach (Formula fSub in cfEffects.Operands)
                     {
-                        if (((CompoundFormula)fSub).Operator == "when")
-                            lConditions.Add((CompoundFormula)fSub);
-                        else
+                        if (fSub is PredicateFormula)
                             lObligatory.Add(fSub);
-                    }
-                    else if (fSub is ProbabilisticFormula)
-                    {
-                        //not doing anything here - assuming no nested conditions inside probabilistic
+                        else if (fSub is CompoundFormula)
+                        {
+                            if (((CompoundFormula)fSub).Operator == "when")
+                                lConditions.Add((CompoundFormula)fSub);
+                            else
+                                lObligatory.Add(fSub);
+                        }
+                        else if (fSub is ProbabilisticFormula)
+                        {
+                            //not doing anything here - assuming no nested conditions inside probabilistic
+                        }
                     }
                 }
             }

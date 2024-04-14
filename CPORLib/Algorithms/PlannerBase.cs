@@ -189,6 +189,8 @@ namespace CPORLib.Algorithms
                 if (!IsReasoningAction(sActionName))
                 {
                     Action a = pssCurrent.GetAction(sActionName);
+                    if (a == null)
+                        continue;
                     string sCleanName = a.Name.Replace(Utilities.DELIMITER_CHAR, " ");
                     lFilteredActions.Add(sCleanName);
                 }
@@ -329,7 +331,50 @@ namespace CPORLib.Algorithms
                 {
                     Console.WriteLine(e.Message);
                     pssCurrent.GetTaggedDomainAndProblemDE(DeadendStrategies.Lazy, bPreconditionFailure, out Domain dTaggedDE, out Problem pTaggedDE);
+                    //This is probably where we need to find the first make-open
                     lPlan = RunPlanner(dTaggedDE, pTaggedDE, -1);
+                   
+                    if (lPlan == null)
+                    {
+                        Debug.WriteLine("Classical Planner Failed to find solution after deadend");
+                        throw new Exception();
+                    }
+                    RemoveInjectedPredicates();
+
+                    if (Options.InjectedDeadendStrategy == Options.InjectedDeadendStrategies.MakeOpenModification)
+                    {
+                        foreach (String step in lPlan)
+                        {
+                            if (step.StartsWith("Make:"))
+                            {
+                                //change Goal to verified-opened
+                                CompoundFormula andGoal = new CompoundFormula("and");
+                                String newGoal = step.Replace("Make:", "verified-");
+                                String[] vars = newGoal.Split(' ');
+                                GroundedPredicate newpGoal = new GroundedPredicate(vars[0], false);
+                                newpGoal.AddConstant(new Constant("pos", vars[1]));
+                                ParametrizedPredicate pp = new ParametrizedPredicate(vars[0]);
+                                pp.AddParameter(vars[1], "pos");
+                                newpGoal.Bind(pp);
+
+                                Formula oldGoal = Problem.Goal;
+
+                                pssCurrent.GetModifiedTaggedDomainAndProblem(DeadendStrategies.Lazy, bPreconditionFailure, new PredicateFormula(newpGoal), out Domain dTaggedModified, out Problem pTaggedModified);
+
+                                lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
+
+                                Problem.Goal = oldGoal;
+
+                                foreach (String s in Problem.Domain.Uncertainties)
+                                {
+                                    ParametrizedPredicate vPred = new ParametrizedPredicate("verified-" + s);
+                                    vPred.AddParameter("?j", "pos");
+                                    Problem.Domain.RemoveFakePredicate(vPred);
+                                }
+                                break;
+                            }
+                        }
+                    }
                 }
                 if (lPlan == null)
                 {
@@ -342,6 +387,26 @@ namespace CPORLib.Algorithms
             
 
             return lPlan;
+        }
+
+        private void RemoveInjectedPredicates()
+        {
+            foreach (String s in Problem.Domain.Uncertainties)
+            {
+                ParametrizedPredicate vPred = new ParametrizedPredicate("verified-" + s);
+                vPred.AddParameter("?j", "pos");
+                Problem.Domain.RemoveFakePredicate(vPred);
+            }
+            List<PlanningAction> actionsToRemove = new List<PlanningAction>();
+            foreach (PlanningAction pa in Problem.Domain.Actions)
+            {
+                if (pa.Name.StartsWith("Make:"))
+                    actionsToRemove.Add(pa);
+            }
+            foreach (PlanningAction pa in actionsToRemove)
+            {
+                Problem.Domain.Actions.Remove(pa);
+            }
         }
 
         protected List<string> PlanWithClassicalDeadendDetection(PartiallySpecifiedState pssCurrent, out State sChosen, out bool bIsDeadend)

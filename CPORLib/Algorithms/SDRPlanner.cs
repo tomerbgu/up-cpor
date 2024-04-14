@@ -215,8 +215,6 @@ namespace CPORLib.Algorithms
             if (lPlan == null || lPlan.Count ==0)
             {
                 Error = "Could not plan for the current state";
-                //TODO how to separate other cases from deadends
-                //add fake open-door action
                 return GetAction();
                 //return null;
             }

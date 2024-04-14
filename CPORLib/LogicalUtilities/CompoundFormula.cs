@@ -774,6 +774,8 @@ namespace CPORLib.LogicalUtilities
                 else
                     cfNew.SimpleAddOperand(((CompoundFormula)f).RemovePredicates(lPredicates));
             }
+            if (cfNew.Operands.Count == 0)
+                return null;
             return cfNew;
         }
 

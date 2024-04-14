@@ -1079,8 +1079,9 @@ namespace CPORLib.PlanningModel
         public Action GetAction(string sActionName)
         {
             string sRevisedActionName;
-            if (sActionName.StartsWith("Fake:"))
-                sRevisedActionName = sActionName.Replace(Utilities.SplitString(sActionName, ' ')[0], "sense-door");
+            if (sActionName.StartsWith("Make:"))
+                return null;
+                //sRevisedActionName = sActionName.Replace(Utilities.SplitString(sActionName, ' ')[0], "sense-door");
             else
                 sRevisedActionName = sActionName.Replace(Utilities.DELIMITER_CHAR, " ");
             string[] aName = Utilities.SplitString(sRevisedActionName, ' ');
@@ -2273,6 +2274,20 @@ namespace CPORLib.PlanningModel
                 pssCurrent = pssCurrent.m_sPredecessor;
             }
             m_bsInitialBelief.GetTaggedDomainAndProblemDE(this, lActions, dsStrategy, bPreconditionFailure, out int cTags, out dTagged, out pTagged);
+        }
+
+        public void GetModifiedTaggedDomainAndProblem(Options.DeadendStrategies dsStrategy, bool bPreconditionFailure, PredicateFormula newGoal,
+            out Domain dTagged, out Problem pTagged)
+        {
+            List<Action> lActions = new List<PlanningAction>();
+            PartiallySpecifiedState pssCurrent = this;
+            while (pssCurrent.m_sPredecessor != null)
+            {
+                if (pssCurrent.GeneratingAction != null)
+                    lActions.Insert(0, pssCurrent.GeneratingAction);
+                pssCurrent = pssCurrent.m_sPredecessor;
+            }
+            m_bsInitialBelief.GetModifiedTaggedDomainAndProblem(this, lActions, dsStrategy, bPreconditionFailure, newGoal, out dTagged, out pTagged);
         }
 
         private State WriteTaggedDomainAndProblemDeadEnd(List<Action> lActions, List<Formula> lMaybeDeadends, DeadendStrategies dsStrategy, bool bPreconditionFailure, out int cTags, out MemoryStream msModels)

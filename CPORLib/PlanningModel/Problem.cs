@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Xml.Linq;
 using CPORLib.LogicalUtilities;
 using CPORLib.Parsing;
 using CPORLib.Tools;
@@ -42,7 +43,32 @@ namespace CPORLib.PlanningModel
             m_lInitiallyUnknown = new HashSet<Predicate>();
             DeadEndList = new List<Formula>();
         }
+        public Problem(Problem p)
+        {
+            Domain = p.Domain;
+            m_lKnown = new HashSet<Predicate>();
+            m_lHidden = new List<CompoundFormula>();
+            m_lInitiallyUnknown = new HashSet<Predicate>();
 
+            foreach (Predicate pred in p.Known)
+            {
+                m_lKnown.Add(pred.Clone());
+            }
+            foreach (Predicate pred in p.Unknown)
+            {
+                m_lInitiallyUnknown.Add(pred.Clone());
+            }
+            foreach (CompoundFormula cf in p.Hidden)
+            {
+                m_lHidden.Add((CompoundFormula)cf.Clone());
+            }
+
+            Name = p.Name;
+            Goal = p.Goal;
+            ReasoningActions = p.ReasoningActions;
+            m_dRelevantPredicates = p.m_dRelevantPredicates;
+            DeadEndList = p.DeadEndList;
+        }
         public void AddKnown(Predicate p)
         {
             m_lKnown.Add(p);
@@ -904,6 +930,7 @@ namespace CPORLib.PlanningModel
                                         ISet<Predicate> lTrueState, Dictionary<string, double> dFunctionValues, Options.DeadendStrategies dsStrategy,
                                         bool bPreconditionFailure, ISet<Predicate> verified, bool deadEnds)
         {
+            //bool onlyChangeProblem = true;
             Problem problem = new Problem("K" + Name, dTagged);
 
             if (Options.TIME_STEPS > 0)
@@ -918,36 +945,39 @@ namespace CPORLib.PlanningModel
 
             if(dFunctionValues != null && dFunctionValues.Count > 0)
                 throw new NotImplementedException();
+            //deadEnds = Domain.Predicates.Where(p => p.Name == "verified-opened").Count() > 0;
             if (deadEnds)
             {
-                foreach (Constant c in Domain.Constants)
+                foreach (String s in Domain.Uncertainties)
                 {
-                    bool found = false;
-                    foreach (GroundedPredicate gpVer in verified)
+                    foreach (Constant c in Domain.Constants)
                     {
-                        if (gpVer.Name == c.Name)
+                        bool found = false;
+                        foreach (GroundedPredicate gpVer in verified)
                         {
-                            GroundedPredicate gp = new GroundedPredicate("verified-open", false);
+                            if (gpVer.Name==s && gpVer.Constants[0].Name == c.Name)
+                            {
+                                GroundedPredicate gp = new GroundedPredicate("verified-" + s, false);
+                                gp.AddConstant(c);
+                                ParametrizedPredicate pp = new ParametrizedPredicate("verified-" + s);
+                                pp.AddParameter(c.Name, "pos");
+                                gp.Bind(pp);
+                                problem.AddKnown(gp);
+                                lObserved.Add(gp);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found)
+                        {
+                            GroundedPredicate gp = new GroundedPredicate("verified-" + s, true);
                             gp.AddConstant(c);
-                            ParametrizedPredicate pp = new ParametrizedPredicate("verified-open");
+                            ParametrizedPredicate pp = new ParametrizedPredicate("verified-" + s);
                             pp.AddParameter(c.Name, "pos");
                             gp.Bind(pp);
-                            //problem.AddKnown(gp);
                             lObserved.Add(gp);
-                            found = true;
+                            problem.AddKnown(gp);
                         }
-                        if (found)
-                            break;
-                    }
-                    if (!found)
-                    {
-                        GroundedPredicate gp = new GroundedPredicate("verified-open", true);
-                        gp.AddConstant(c);
-                        ParametrizedPredicate pp = new ParametrizedPredicate("verified-open");
-                        pp.AddParameter(c.Name, "pos");
-                        gp.Bind(pp);
-                        //problem.AddKnown(gp);
-                        lObserved.Add(gp);
                     }
                 }
             }
@@ -1002,9 +1032,6 @@ namespace CPORLib.PlanningModel
                 }
 
             }
-
-
-            
 
             CompoundFormula cfTrueGoal = new CompoundFormula("and");
             CompoundFormula cfIdentificationGoal = new CompoundFormula("and");
