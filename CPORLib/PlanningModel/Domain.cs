@@ -174,10 +174,10 @@ namespace CPORLib.PlanningModel
                 }
                 p = ppNew;
             }
-            Predicates.Add(p);
+            //Predicates.Add(p);
             Uncertainties.Add(p);
-            m_lAlwaysKnown.Add(p.Name);
-            m_lAlwaysConstant.Add(p.Name);
+            //m_lAlwaysKnown.Add(p.Name);
+            //m_lAlwaysConstant.Add(p.Name);
         }
         public override string ToString()
         {
