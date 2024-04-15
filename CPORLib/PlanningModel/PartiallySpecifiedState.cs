@@ -1557,7 +1557,7 @@ namespace CPORLib.PlanningModel
             bool actionFailed = (aOrg.Observe == null && sObservation != null);
             if (aOrg.Observe != null && sObservation == null)
                 return null;
-            else if (aOrg.Observe == null && sObservation != null)
+            else if ((aOrg.Observe == null && sObservation != null) || sObservation == "Fail")
             {
                 //TODO make less wastefull
                 State sNew2 = null;
@@ -1573,7 +1573,7 @@ namespace CPORLib.PlanningModel
 
                 bsNew2.RemoveObservedPreCond(aOrg);
 
-                bsNew2.GeneratingAction = GeneratingAction; //TPDP maybe this needs to be aOrg
+                bsNew2.GeneratingAction = GeneratingAction; //TODO maybe this needs to be aOrg
                 return bsNew2;
             }
             else

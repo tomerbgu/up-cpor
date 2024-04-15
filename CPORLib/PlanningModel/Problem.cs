@@ -962,7 +962,7 @@ namespace CPORLib.PlanningModel
                         bool found = false;
                         foreach (GroundedPredicate gpVer in uncertainVerified)
                         {
-                            if (gpVer.Equals(p) || gpVer.Equals(p.Negate()))
+                            if (gpVer.Canonical().Equals(p.Canonical()))
                             {
                                 found = true;
                                 break;

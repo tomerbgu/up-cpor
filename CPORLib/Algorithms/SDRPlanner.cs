@@ -49,7 +49,7 @@ namespace CPORLib.Algorithms
                     //test 2: Fail later on
                     if (domain.Name == "unix")
                     {
-                        if (p.ToString().Contains("sub-dir root sub21") || p.ToString().Contains("file-in-dir my-file root") || p.ToString().StartsWith("(sub-dir root"))
+                        if (p.ToString().Contains("sub-dir root sub211") || p.ToString().Contains("file-in-dir my-file root") || p.ToString().StartsWith("(sub-dir root") || p.ToString().StartsWith("(is-cur-dir root"))
                         {
                             Console.WriteLine("negated this: " + p.ToString());
                             predList.Add(p);

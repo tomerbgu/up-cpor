@@ -1919,7 +1919,7 @@ namespace CPORLib.PlanningModel
                     bool found = false;
                     foreach (GroundedPredicate gpVer in uncertainVerified)
                     {
-                        if (gpVer.Equals(p))
+                        if (gpVer.Canonical().Equals(p.Canonical()))
                         {
                             found = true;
                             break;
@@ -1950,7 +1950,7 @@ namespace CPORLib.PlanningModel
         {
             cTags = 0;
 
-            bool modifyDomainBeforeStateSelection = Options.InjectedDeadendStrategy == Options.InjectedDeadendStrategies.MakeOpenModification;
+            bool modifyDomainBeforeStateSelection = Options.InjectedDeadendStrategy == Options.InjectedDeadendStrategies.MakeActionModification;
             List<PlanningAction> lFakeActions = null;
             if (modifyDomainBeforeStateSelection)
                 lFakeActions = ModifyDomainBeforeStateSelection(true);

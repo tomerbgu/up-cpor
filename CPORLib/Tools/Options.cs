@@ -14,7 +14,7 @@ namespace CPORLib.Tools
 
         public static DeadendStrategies DeadendStrategy = DeadendStrategies.Lazy;
 
-        public enum InjectedDeadendStrategies { None, ProblemModification, MakeOpenModification };
+        public enum InjectedDeadendStrategies { None, ProblemModification, MakeActionModification };
         public static InjectedDeadendStrategies InjectedDeadendStrategy = InjectedDeadendStrategies.None;
 
         public static bool UseOptions = true;

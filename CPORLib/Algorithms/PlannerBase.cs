@@ -331,7 +331,6 @@ namespace CPORLib.Algorithms
                 {
                     Console.WriteLine(e.Message);
                     pssCurrent.GetTaggedDomainAndProblemDE(DeadendStrategies.Lazy, bPreconditionFailure, out Domain dTaggedDE, out Problem pTaggedDE);
-                    //This is probably where we need to find the first make-open
                     lPlan = RunPlanner(dTaggedDE, pTaggedDE, -1);
                    
                     if (lPlan == null)
@@ -341,7 +340,7 @@ namespace CPORLib.Algorithms
                     }
                     RemoveInjectedPredicates();
 
-                    if (Options.InjectedDeadendStrategy == Options.InjectedDeadendStrategies.MakeOpenModification)
+                    if (Options.InjectedDeadendStrategy == Options.InjectedDeadendStrategies.MakeActionModification)
                     {
                         foreach (String step in lPlan)
                         {

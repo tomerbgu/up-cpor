@@ -893,7 +893,7 @@ namespace CPORLib.PlanningModel
                 }
                 aNew.Effects = cfEffects;
             }
-            else if (Observe != null)
+            if (Observe != null)
             {
                 if (aNew.Effects == null)
                     aNew.Effects = new CompoundFormula("and");
