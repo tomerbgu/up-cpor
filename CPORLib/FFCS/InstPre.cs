@@ -11,7 +11,7 @@ using static CPORLib.FFCS.Output;
 using static CPORLib.FFCS.Planning;
 using static CPORLib.FFCS.FFUtilities;
 using static CPORLib.FFCS.Constants;
-
+using CPORLib.Tools;
 
 namespace CPORLib.FFCS
 {
@@ -1084,6 +1084,7 @@ namespace CPORLib.FFCS
             if (FF.DP.ggoal.connective == TRU)
             {
                 FFUtilities.Write("\nff: normalize: goal can be simplified to true. The empty plan solves it\n\n");
+                throw new DeadendException("Deadend");
                 Exit(1);
             }
             if (FF.DP.ggoal.connective == FAL)

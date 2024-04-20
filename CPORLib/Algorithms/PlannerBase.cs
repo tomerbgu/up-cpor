@@ -201,6 +201,7 @@ namespace CPORLib.Algorithms
         }
         protected bool IsReasoningAction(string sAction)
         {
+            if (sAction==null) return false;
             sAction = sAction.ToLower();
             if (sAction.StartsWith("merge") || sAction.StartsWith("refute") || sAction.StartsWith("unmerge") || sAction.StartsWith("tagmerge"))
                 return true;
@@ -319,18 +320,33 @@ namespace CPORLib.Algorithms
             //MemoryStream msModels = null;
             //sChosen = pssCurrent.WriteTaggedDomainAndProblem( out cTags, out msModels);
 
-            pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, bPreconditionFailure, out int cTags, out Domain dTagged, out Problem pTagged);
+            pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, bPreconditionFailure, out int cTags, out Domain dTagged, out Problem pTagged, false, null);
 
 
             if (!WriteAllKVariations || cTags == 1)
             {
-                try {
+                bool deadend = false;
+                try
+                {
+                    ExecutionData.Planning++;
+                    
                     lPlan = RunPlanner(dTagged, pTagged, -1);
+                    if (lPlan.Count()==0)
+                    {
+                        deadend = true;
+                        Console.WriteLine("weirdDeadEnd");
+                    }
                 }
                 catch (DeadendException e)
                 {
-                    Console.WriteLine(e.Message);
-                    pssCurrent.GetTaggedDomainAndProblemDE(DeadendStrategies.Lazy, bPreconditionFailure, out Domain dTaggedDE, out Problem pTaggedDE);
+                    //Console.WriteLine(e.Message);
+                    deadend = true;
+                }
+                if (deadend)
+                {
+                    
+                    pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out int ctags, out Domain dTaggedDE, out Problem pTaggedDE, true, null);
+                    ExecutionData.ReplanningCount++;
                     lPlan = RunPlanner(dTaggedDE, pTaggedDE, -1);
                    
                     if (lPlan == null)
@@ -340,20 +356,24 @@ namespace CPORLib.Algorithms
                     }
                     RemoveInjectedPredicates();
 
-                    if (Options.InjectedDeadendStrategy == Options.InjectedDeadendStrategies.MakeActionModification)
+                    if (Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.MakeTrue)
                     {
                         foreach (String step in lPlan)
                         {
                             if (step.StartsWith("Make:"))
                             {
-                                Formula oldGoal = Problem.Goal;
-
-                                pssCurrent.GetModifiedTaggedDomainAndProblem(DeadendStrategies.Lazy, false, step, out Domain dTaggedModified, out Problem pTaggedModified);
-
+                                //try
+                                //{
+                                pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out ctags, out Domain dTaggedModified, out Problem pTaggedModified, false, step);
+                                ExecutionData.ReplanningIncludeModCount++;
                                 lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
-
-                                Problem.Goal = oldGoal;
-
+                                //}
+                                //catch (DeadendException e)
+                                //{
+                                //    pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, true, out ctags, out Domain dTaggedModified, out Problem pTaggedModified, false, step);
+                                //    ExecutionData.ReplanningIncludeModCount++;
+                                //    lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
+                                //}
                                 foreach (Predicate p in Problem.Domain.Uncertainties)
                                 {
                                     Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
@@ -899,7 +919,7 @@ namespace CPORLib.Algorithms
             if (Options.Translation != Options.Translations.SDR)
                 throw new NotImplementedException();
 
-            domain = Problem.Domain.CreateTaggedDomain(dTags, Problem, null, false);
+            domain = Problem.Domain.CreateTaggedDomain(dTags, Problem, null);
 
             problem = Problem.CreateTaggedProblem(domain, dTags, lObserved, dTags.Values.First(), lStates.First().FunctionValues, dsStrategy, false, null, false); //the first tag is the real state
         }

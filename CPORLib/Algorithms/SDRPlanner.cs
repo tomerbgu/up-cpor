@@ -25,101 +25,45 @@ namespace CPORLib.Algorithms
         public string Error { get; private set; }
         public bool GoalReached { get { return CurrentState.IsGoalState(); } }
         private bool CheckGoalReached = true;
-
-        public SDRPlanner(Domain domain, Problem problem): base(domain, problem)    
+        public HashSet<Predicate> PredicatesToNegate;
+        public SDRPlanner(Domain domain, Problem problem, List<Predicate> toNegate) : base(domain, problem)    
         {
             Options.ComputeCompletePlanTree = false;
             Options.AddAllKnownToGiven = true; //this is needed in, e.g., medpks010
-            BeliefState bsInitial = problem.GetInitialBelief();
-            HashSet<Predicate> predList = new HashSet<Predicate>();
-            bool safe=false, wumpus = false, gold = false, pit = false;
-            foreach (Predicate p in bsInitial.Observed)
+            PredicatesToNegate = new HashSet<Predicate>();
+            if (problem.Name == "wumpus-15")
             {
-                if (domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name))
+                foreach (Predicate predicate in toNegate)
                 {
-                    ////test 1: wrong off the bat
-                    //if (domain.Name == "unix")
-                    //{
-                    //    if (p.ToString().Contains("sub-dir root sub21"))
-                    //    {
-                    //        Console.WriteLine("negated this: " + p.ToString());
-                    //        predList.Add(p);
-                    //    }
-                    //}
-                    //test 2: Fail later on
-                    if (domain.Name == "unix")
+                    Predicate predToAdd = problem.Known.FirstOrDefault(p => p.Canonical().Equals(predicate));
+                    if (predToAdd.Negation == Options.FalsePositive)
+                        PredicatesToNegate.Add(predToAdd);
+                }
+            }
+            if (PredicatesToNegate.Count == 0)
+            {
+                foreach (Predicate p in problem.Known)
+                {
+                    if (p.Negation == Options.FalsePositive && domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name))
                     {
-                        if (p.ToString().Contains("sub-dir root sub211") || p.ToString().Contains("file-in-dir my-file root") || p.ToString().StartsWith("(sub-dir root") || p.ToString().StartsWith("(is-cur-dir root"))
+                        if (true || RandomGenerator.NextDouble() < Options.threshold)
                         {
-                            Console.WriteLine("negated this: " + p.ToString());
-                            predList.Add(p);
-                        }
-                    }
-                    if (domain.Name == "doors")
-                    {
-                        if (p.ToString().StartsWith("(opened p3-"))
-                        {
-                            Console.WriteLine("negated this: " + p.ToString());
-                            predList.Add(p);
-                        }
-                    }
-                
-                    if (domain.Name == "blocksworld")
-                    {
-                        if (RandomGenerator.NextDouble() < 0.8)
-                        {
-                            Console.WriteLine("negated this: " + p.ToString());
-                            predList.Add(p);
-                        }
-                    }
-                    if (domain.Name == "wumpus")
-                    {
-                        bool Rand = false;
-                        if (Rand)
-                        {
-                            if (RandomGenerator.NextDouble() < 0.3)
-                            {
-                                Console.WriteLine("negated this: " + p.ToString());
-                                predList.Add(p);
-                            }
-                        }
-                        else
-                        {
-                            //if (p.ToString().Contains("safe p2-1"))
-                            ////if (RandomGenerator.NextDouble() < 0.0 && p.Name == "safe" && !safe)
-                            //{
-                            //    Console.WriteLine("negated this: " + p.ToString());
-                            //    predList.Add(p);
-                            //    safe = true;
-                            //}
-                            if (p.Name == "pit-at" && !pit)
-                            {
-                                Console.WriteLine("negated this: " + p.ToString());
-                                predList.Add(p);
-                                pit = true;
-                            }
-                            if (p.Name == "wumpus-at" && !wumpus)
-                            {
-                                Console.WriteLine("negated this: " + p.ToString());
-                                predList.Add(p);
-                                wumpus = true;
-                            }
-                            if (p.Name == "gold-at" && !gold && p.Negation)
-                            {
-                                Console.WriteLine("negated this: " + p.ToString());
-                                predList.Add(p);
-                                gold = true;
-                            }
+                            PredicatesToNegate.Add(p);
                         }
                     }
                 }
             }
-            foreach (Predicate p in predList)
+            Problem fakeProb = new Problem(problem);
+            ExecutionData.NumberOfNegations = PredicatesToNegate.Count;
+            foreach (Predicate p in PredicatesToNegate)
             {
-                bsInitial.Observed.Remove(p);
-                bsInitial.AddObserved(p.Negate());
+                //Console.WriteLine("negated this: " + p.ToString());
+                fakeProb.Known.Remove(p);
+                fakeProb.AddKnown(p.Negate());
             }
-
+            BeliefState bsInitial = fakeProb.GetInitialBelief();
+            if (Options.FalsePositive && InaccuracyHandlingStrategy==InaccuracyHandlingStrategies.Baseline)
+                bsInitial.ModifyProblemBeforeStateSelection(CurrentState);
             CurrentState = bsInitial.GetPartiallySpecifiedState();
             FutureActions = null;
             NextActionIndex= 0;
@@ -141,18 +85,16 @@ namespace CPORLib.Algorithms
                 {
                     CheckGoalReached = false;
                     //check if there is smarter way to do this
-                    IEnumerator<Predicate> en = CurrentState.Observed.GetEnumerator();
-                    en.MoveNext();
-                    while (en.Current != null)
+                    ISet<Predicate> GoalPredicates = Problem.Goal.GetAllPredicates();
+                    foreach (Predicate curr in GoalPredicates)
                     {
-                        if (en.Current.Name == Problem.pGoal.Name)
+                        if (CurrentState.Observed.Contains(curr))
                         {
-                            CurrentState.m_bsInitialBelief.Observed.Remove(en.Current);
-                            CurrentState.Observed.Remove(en.Current);
-                            CurrentState.Hidden.Add(en.Current);
-                            break;
+                            CurrentState.m_bsInitialBelief.Observed.Remove(curr);
+                            CurrentState.Observed.Remove(curr);
+                            CurrentState.Hidden.Add(curr);
+                            break; //dont need to remove all to make it think something is wrong - unless goal is an or-formula
                         }
-                        en.MoveNext();
                     }
 
                     CompoundFormula cf = new CompoundFormula("or");
@@ -204,6 +146,8 @@ namespace CPORLib.Algorithms
                 return GetAction();
                 //return null;
             }
+            else
+                CheckGoalReached = true; //TODO maybe irrelevant
             FutureActions = lPlan;
             NextActionIndex = 0;
             return GetAction();

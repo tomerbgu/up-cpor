@@ -467,8 +467,7 @@ namespace CPORLib.FFCS
             }
             else
             {
-                BFSSolver bfs = new BFSSolver();
-                var p = bfs.ManualSolve(m_pProblem, m_dDomain, false);
+                lPlan = new List<string>();
             }
 
             output_planner_info();

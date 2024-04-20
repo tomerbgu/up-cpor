@@ -14,9 +14,11 @@ namespace CPORLib.Tools
 
         public static DeadendStrategies DeadendStrategy = DeadendStrategies.Lazy;
 
-        public enum InjectedDeadendStrategies { None, ProblemModification, MakeActionModification };
-        public static InjectedDeadendStrategies InjectedDeadendStrategy = InjectedDeadendStrategies.None;
-
+        public enum InaccuracyHandlingStrategies { FailHandler, Baseline, MakeTrue };
+        public static InaccuracyHandlingStrategies InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.Baseline;
+        public static bool FalsePositive = false; //false creates deadends. true creates failures
+        public static double threshold = 0.2;
+        public static int Iterations = 10;
         public static bool UseOptions = true;
         public static bool ReplaceNonDeterministicEffectsWithOptions = true;
         public static bool UseCosts { get; private set; }

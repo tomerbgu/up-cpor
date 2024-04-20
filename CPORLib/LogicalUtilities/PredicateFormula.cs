@@ -50,7 +50,7 @@ namespace CPORLib.LogicalUtilities
             if (lKnown != null)
             {
                 if (bContainsNegations)
-                    return lKnown.Contains(Predicate);
+                    return lKnown.FirstOrDefault(o => o.Equals(Predicate)) != null; //for some reason .Contains doesnt work here
                 else
                 {
                     Predicate pCheck = Predicate;

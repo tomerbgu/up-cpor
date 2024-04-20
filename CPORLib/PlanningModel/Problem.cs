@@ -64,9 +64,19 @@ namespace CPORLib.PlanningModel
             }
 
             Name = p.Name;
-            Goal = p.Goal;
+            Goal = p.Goal.Clone();
             ReasoningActions = p.ReasoningActions;
-            m_dRelevantPredicates = p.m_dRelevantPredicates;
+            m_dRelevantPredicates = new Dictionary<GroundedPredicate, HashSet<GroundedPredicate>>();
+            foreach (GroundedPredicate pred in p.m_dRelevantPredicates.Keys)
+            {
+                HashSet<GroundedPredicate> hs = new HashSet<GroundedPredicate>();
+                foreach (GroundedPredicate pl in p.m_dRelevantPredicates[pred])
+                {
+                    hs.Add((GroundedPredicate)pl.Clone());
+                }
+                m_dRelevantPredicates[(GroundedPredicate)pred.Clone()] = hs;
+            }
+
             DeadEndList = p.DeadEndList;
         }
         public void AddKnown(Predicate p)

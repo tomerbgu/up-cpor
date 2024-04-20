@@ -39,6 +39,7 @@ namespace CPORLib.PlanningModel
         public State UnderlyingEnvironmentState { get; set; }
         private List<ISet<Predicate>> m_lCurrentTags;
         private ISet<Predicate> m_lProblematicTag;
+        private ISet<Predicate> m_lNeededTag;
         private List<ISet<Predicate>> m_lDeadendTags;
         public bool MaintainProblematicTag { get; set; }
         public string OutputType { get { return "SAS"; } }
@@ -1322,9 +1323,22 @@ namespace CPORLib.PlanningModel
             ISet<Predicate> lToAssign = GetHiddenPredicates(lHidden);
 
             HashSet<Predicate> lInitialAssignment = new HashSet<Predicate>();
+            HashSet<Predicate> tempNeededTags = new HashSet<Predicate>();
             if (false && bCheatUsingAt)
                 CheatUsingAtPredicate(lToAssign, lInitialAssignment);
-
+            if (m_lNeededTag != null) {
+                lInitialAssignment.UnionWith(m_lNeededTag);
+                
+                foreach (Predicate p in m_lNeededTag)
+                {
+                    lToAssign.Remove(p);;
+                }
+                foreach (Predicate p in m_lNeededTag)
+                {
+                    tempNeededTags.Add(p.Negate());
+                }
+                m_lNeededTag = tempNeededTags;
+            }
             //ApplySimpleOneOfs(lOneOfs, lInitialAssignment, lCanonicalPredicates);
 
             ISet<Predicate> lAssignment = null;
@@ -1499,6 +1513,11 @@ namespace CPORLib.PlanningModel
         }
         private ISet<Predicate> SimpleChooseHiddenPredicates(List<Formula> lHidden, HashSet<Predicate> lAssignment, ISet<Predicate> lUnknown, List<ISet<Predicate>> lCurrentAssignments, bool random)
         {
+            foreach(Predicate p in lAssignment)
+            {
+                lHidden.Add(new PredicateFormula(p));
+            }
+            
             while (lUnknown.Count > 0)
             {
                 bool bAllTrue = false, bAllFalse = false;
@@ -1783,13 +1802,108 @@ namespace CPORLib.PlanningModel
 
         public List<ISet<Predicate>> ChosenStates = null;
 
-
+        private void addNeededTag(Predicate p)
+        {
+            if (m_lNeededTag==null)
+            {
+                m_lNeededTag = new HashSet<Predicate>();
+            }
+            m_lNeededTag.Add(p);
+        }
 
         public void GetTaggedDomainAndProblem(PartiallySpecifiedState pssCurrent, List<Action> lAppliedActions, 
             Options.DeadendStrategies dsStrategy, bool bPreconditionFailure,
-            out int cTags, out Domain dTagged, out Problem pTagged
+            out int cTags, out Domain dTagged, out Problem pTagged, bool fakeDeadends, string newGoal
             )
         {
+            List<PlanningAction> lFakeActions = null;
+            bool modifyDomainBeforeStateSelection = false;
+            bool modifyProblemBeforeStateSelection = false;
+            BeliefState original = null;
+            Problem oProb = null;
+            HashSet<Predicate> origObserved = new HashSet<Predicate>();
+            bool modifyGoal = newGoal != null;
+            if (fakeDeadends || modifyGoal)
+            {
+                modifyDomainBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.MakeTrue && !modifyGoal;
+
+                if (modifyDomainBeforeStateSelection)
+                    lFakeActions = ModifyDomainBeforeStateSelection(true);
+                modifyProblemBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.Baseline;
+                original = Clone();
+                oProb = new Problem(Problem);
+                foreach (Predicate pred in Observed)
+                {
+                    origObserved.Add(pred.Clone());
+                }
+
+                if (modifyProblemBeforeStateSelection)
+                {
+                    ModifyProblemBeforeStateSelection(pssCurrent);
+                }
+               
+            }
+            Formula oldGoal = null;
+            Formula modifiedGoal = null;
+            Predicate pKNObserve = null;
+            Predicate pKObserve = null;
+            bool guysWay = true;
+            if (modifyGoal)
+            {
+                oldGoal = Problem.Goal;
+                //change Goal to verified-opened
+                
+                if (!guysWay)
+                {
+                    ModifyDomainBeforeStateSelection(false);
+                    modifiedGoal = new CompoundFormula("and");
+                    newGoal = newGoal.Replace("Make:", "verified-");
+                    String[] vars = newGoal.Split(' ');
+                    ParametrizedPredicate pp = (ParametrizedPredicate)Problem.Domain.Predicates.FirstOrDefault(obj => obj.Name == vars[0]);
+                    Dictionary<Parameter, Constant> dBindings = new Dictionary<Parameter, Constant>();
+
+                    int i = 1;
+                    foreach (Parameter p in pp.Parameters)
+                    {
+                        dBindings[p] = new Constant(p.Type, vars[i]);
+                        i++;
+                    }
+                    GroundedPredicate newPredicateGoal = pp.Ground(dBindings);
+                    modifiedGoal = new PredicateFormula(newPredicateGoal);
+                }
+                else
+                {
+                    ModifyProblemBeforeStateSelection(pssCurrent);
+                    modifiedGoal = new CompoundFormula("or");
+                    //CompoundFormula modifiedGoalCF = (CompoundFormula)modifiedGoal;
+                    string pred = newGoal.Replace("Make:", "");
+                    String[] vars = pred.Split(' ');
+                    ParametrizedPredicate pp = (ParametrizedPredicate)Problem.Domain.Predicates.FirstOrDefault(obj => obj.Name == vars[0]).Clone();
+                    GroundedPredicate newGrounded = new GroundedPredicate(pp.Name);
+                    int i = 1;
+                    foreach (Parameter p in pp.Parameters)
+                    {
+                        newGrounded.AddConstant(new Constant(p.Type, vars[i]));
+                        i++;
+                    }
+                    
+                    pKObserve = Predicate.GenerateKnowPredicate(newGrounded);
+                    //pKNObserve = Predicate.GenerateKnowPredicate(newGrounded.Negate());
+
+                    //modifiedGoalCF.AddOperand(pKObserve);
+                    //modifiedGoalCF.AddOperand(pKNObserve);
+                    //modifiedGoal = new PredicateFormula(pKObserve);
+
+                    //Problem.Known.Remove(pKObserve);
+                    //Problem.Known.Remove(pKNObserve);
+                    Predicate currGoal = pKObserve;
+                    //if (bPreconditionFailure)
+                    //    currGoal = pKNObserve;
+                    modifiedGoal = new PredicateFormula(currGoal);
+
+                    addNeededTag(newGrounded);
+                }
+            }
             cTags = 0;
             List<ISet<Predicate>> lChosen = ChooseStateSet();
             ChosenStates = lChosen;
@@ -1818,7 +1932,7 @@ namespace CPORLib.PlanningModel
             if (Options.Translation == Options.Translations.SDR)
             {
 
-                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null, false);
+                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null);
 
             }
             else
@@ -1828,10 +1942,35 @@ namespace CPORLib.PlanningModel
             if (Options.Translation == Options.Translations.SDR)
             {
                 pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(), 
-                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, false);
+                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, modifyDomainBeforeStateSelection);
             }
             else
                 throw new NotImplementedException();
+
+            if (fakeDeadends)
+            {
+                if (modifyProblemBeforeStateSelection)
+                {
+                    Problem = oProb;
+                    m_lHiddenFormulas = original.m_lHiddenFormulas;
+                    m_lObserved = origObserved;
+                }
+                if (modifyDomainBeforeStateSelection)
+                {
+                    foreach (PlanningAction fa in lFakeActions)
+                    {
+                        Problem.Domain.Actions.Remove(fa);
+                    }
+                }
+            }
+            if (modifyGoal)
+            {
+                if (guysWay) m_lNeededTag.Clear();
+                pTagged.Goal = modifiedGoal;
+                Problem = oProb;
+                m_lHiddenFormulas = original.m_lHiddenFormulas;
+                m_lObserved = origObserved;
+            }
 
         }
         private List<PlanningAction> ModifyDomainBeforeStateSelection(bool addActions)
@@ -1908,27 +2047,21 @@ namespace CPORLib.PlanningModel
             return null;
         }
 
-        private void ModifyProblemBeforeStateSelection(PartiallySpecifiedState pssCurrent)
+        public void ModifyProblemBeforeStateSelection(PartiallySpecifiedState pssCurrent)
         {
             foreach (Predicate s in Problem.Domain.Uncertainties)
             {
                 var uncertainObserved = Observed.Where(p => p.Name == s.Name);
-                var uncertainVerified = pssCurrent.Verified.Where(p => p.Name == s.Name);
+                IEnumerable<Predicate> uncertainVerified = new HashSet<Predicate>();
+                if(pssCurrent != null)
+                    uncertainVerified = pssCurrent.Verified.Where(p => p.Name == s.Name);
                 foreach (Predicate p in uncertainObserved)
                 {
-                    bool found = false;
-                    foreach (GroundedPredicate gpVer in uncertainVerified)
-                    {
-                        if (gpVer.Canonical().Equals(p.Canonical()))
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found)
+                    if ((p.Negation||pssCurrent==null) && !uncertainVerified.Contains(p))
                     {
                         bool neg1 = Observed.Remove(p);
                         bool neg2 = Problem.Known.Remove(p);
+                        //bool neg3 = pssCurrent.Observed.Remove(p);
                         if (neg1 || neg2)
                         {
                             Unknown.Add(p.Canonical());
@@ -1940,158 +2073,15 @@ namespace CPORLib.PlanningModel
                         }
                     }
                 }
-            }
-        }
-
-        public void GetTaggedDomainAndProblemDE(PartiallySpecifiedState pssCurrent, List<Action> lAppliedActions,
-            Options.DeadendStrategies dsStrategy, bool bPreconditionFailure,
-            out int cTags, out Domain dTagged, out Problem pTagged
-            )
-        {
-            cTags = 0;
-
-            bool modifyDomainBeforeStateSelection = Options.InjectedDeadendStrategy == Options.InjectedDeadendStrategies.MakeActionModification;
-            List<PlanningAction> lFakeActions = null;
-            if (modifyDomainBeforeStateSelection)
-                lFakeActions = ModifyDomainBeforeStateSelection(true);
-
-            bool modifyProblemBeforeStateSelection = Options.InjectedDeadendStrategy == Options.InjectedDeadendStrategies.ProblemModification;
-            BeliefState original = Clone();
-            Problem oProb = new Problem(Problem);
-            HashSet<Predicate> origObserved = new HashSet<Predicate>();
-            foreach (Predicate pred in Observed)
-            {
-                origObserved.Add(pred.Clone());
-            }
-
-            if (modifyProblemBeforeStateSelection)
-            {
-                ModifyProblemBeforeStateSelection(pssCurrent);
-            }
-
-            List<ISet<Predicate>> lChosen = ChooseStateSet();
-            ChosenStates = lChosen;
-
-            dTagged = null;
-            pTagged = null;
-            if (lChosen == null)
-                return;
-
-            //BUGBUG;//We should cache the states, try to avoid this useless repetition
-            List<State> lStates = ApplyActions(lChosen, lAppliedActions);
-
-            if (lStates.Count == 0)
-            {
-                cTags = 1;
-                pTagged = Problem;
-                dTagged = Problem.Domain;
-                return;
-            }
-
-            HashSet<Predicate> lObserved = new HashSet<Predicate>();
-            Dictionary<string, ISet<Predicate>> dTags = GetTags(lStates, lObserved);
-
-            cTags = dTags.Count;
-
-            if (Options.Translation == Options.Translations.SDR)
-            {
-                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null, modifyDomainBeforeStateSelection);
-            }
-            else
-                throw new NotImplementedException();
-
-
-            if (Options.Translation == Options.Translations.SDR)
-            {
-                pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(),
-                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, modifyDomainBeforeStateSelection);
-            }
-            else
-                throw new NotImplementedException();
-
-            if (modifyProblemBeforeStateSelection)
-            {
-                Problem = oProb;
-                m_lHiddenFormulas = original.m_lHiddenFormulas;
-                m_lObserved = origObserved;
-            }
-            if (modifyDomainBeforeStateSelection)
-            {
-                foreach(PlanningAction fa in lFakeActions)
+                foreach (Predicate p in uncertainVerified)
                 {
-                    Problem.Domain.Actions.Remove(fa);
+                    if (!uncertainObserved.Contains(p))
+                    {
+                        AddObserved(p);
+                        Problem.AddKnown(p);
+                    }
                 }
             }
-
-        }
-
-        public void GetModifiedTaggedDomainAndProblem(PartiallySpecifiedState pssCurrent, List<Action> lAppliedActions,
-            Options.DeadendStrategies dsStrategy, bool bPreconditionFailure,
-            String newGoal, out Domain dTagged, out Problem pTagged
-            )
-        {
-            int cTags = 0;
-            ModifyDomainBeforeStateSelection(false);
-            //change Goal to verified-opened
-            CompoundFormula andGoal = new CompoundFormula("and");
-            newGoal = newGoal.Replace("Make:", "verified-");
-            String[] vars = newGoal.Split(' ');
-            ParametrizedPredicate pp = (ParametrizedPredicate)Problem.Domain.Predicates.FirstOrDefault(obj => obj.Name == vars[0]);
-            Dictionary<Parameter, Constant> dBindings = new Dictionary<Parameter, Constant>();
-
-            int i = 1;
-            foreach (Parameter p in pp.Parameters)
-            {
-                dBindings[p] = new Constant(p.Type, vars[i]);
-                i++;
-            }
-            GroundedPredicate newPredicateGoal = pp.Ground(dBindings);
-            
-
-            Problem.Goal = new PredicateFormula(newPredicateGoal);
-
-            List<ISet<Predicate>> lChosen = ChooseStateSet();
-            ChosenStates = lChosen;
-
-            dTagged = null;
-            pTagged = null;
-            if (lChosen == null)
-                return;
-
-            //BUGBUG;//We should cache the states, try to avoid this useless repetition
-            List<State> lStates = ApplyActions(lChosen, lAppliedActions);
-
-            if (lStates.Count == 0)
-            {
-                cTags = 1;
-                pTagged = Problem;
-                dTagged = Problem.Domain;
-                return;
-            }
-
-            HashSet<Predicate> lObserved = new HashSet<Predicate>();
-            Dictionary<string, ISet<Predicate>> dTags = GetTags(lStates, lObserved);
-
-            cTags = dTags.Count;
-
-            if (Options.Translation == Options.Translations.SDR)
-            {
-
-                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null, false);
-
-            }
-            else
-                throw new NotImplementedException();
-
-
-            if (Options.Translation == Options.Translations.SDR)
-            {
-                pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(),
-                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, false);
-            }
-            else
-                throw new NotImplementedException();
-
         }
 
         public State WriteTaggedDomainAndProblem(PartiallySpecifiedState pssCurrent, List<Action> lAppliedActions, out int cTags, out MemoryStream msModels)
@@ -2286,7 +2276,7 @@ namespace CPORLib.PlanningModel
             else if (Options.Translation == Options.Translations.SDR)
             {
 
-                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null, false);
+                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null);
                 msDomain = dTagged.WriteSimpleDomain(true, false);
 
                 /*
@@ -2760,6 +2750,7 @@ namespace CPORLib.PlanningModel
             }
             */
             //lStates = RandomPermutation(lStates);
+            
             return lStates;
 
         }
@@ -3474,6 +3465,8 @@ namespace CPORLib.PlanningModel
                         while (sTrace.Count > 0 && lLearned.Count > 0)
                         {
                             pssCurrent = sTrace.Pop();
+                            if (pssCurrent.GeneratingAction == null)
+                                continue;
                             //bUpdate = pssCurrent.PropogateObservedPredicates();
                             lLearned = pssCurrent.PropogateObservedPredicates(lLearned);
                         }

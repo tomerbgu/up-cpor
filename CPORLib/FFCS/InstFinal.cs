@@ -612,6 +612,7 @@ namespace CPORLib.FFCS
             if (FF.DP.ggoal.connective == FAL)
             {
                 FFUtilities.Write("\nff: goal can be simplified to false. No plan will solve it\n\n");
+                throw new DeadendException("Deadend"); 
                 Exit(1);
             }
 
@@ -1196,7 +1197,7 @@ namespace CPORLib.FFCS
                 FF.CF.gft_conn[i].axiom_add = false;
                 FF.CF.gft_conn[i].axiom_del = false;
 
-                FF.CF.gft_conn[i].rand = random(BIG_INT);
+                FF.CF.gft_conn[i].rand = RandomGenerator.Next(BIG_INT);
             }
             FF.Planning.gaxdels = new int[FF.CF.gnum_ft_conn];//(, sizeof(int ) );
             FF.Planning.gnum_axdels = 0;

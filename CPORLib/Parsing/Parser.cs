@@ -204,7 +204,26 @@ namespace CPORLib.Parsing
             return ParseProblem(sr, d);
         }
 
-       
+        public List<Predicate> ParseNegations(Domain d, string sNegateFile)
+        {
+            List<Predicate> res = new List<Predicate>();
+            if (File.Exists(sNegateFile))
+            {
+                Debug.WriteLine(sNegateFile);
+                StreamReader sr = new StreamReader(sNegateFile);
+
+                CompoundExpression exp = (CompoundExpression)ToExpression(new StringStreamReader(sr));
+                sr.Close();
+
+                foreach (Expression e in exp.SubExpressions)
+                {
+                    Predicate p = ReadGroundedPredicate((CompoundExpression)e, d);
+                    res.Add(p);
+                }
+            }
+                       
+            return res;
+        }
         private Problem ParseProblem(CompoundExpression exp, string sDeadEndFile, Domain d)
         {
             Problem p = null;
@@ -661,8 +680,12 @@ namespace CPORLib.Parsing
                 }
             }
             if (bParametrized)
+            {
                 if (!MatchParametersToPredicateDeclaration((ParametrizedPredicate)p, d))
                     throw new Exception("Parameter does not match predicate declaration " + p);
+                if (!MatchParametersToUncertaintiesDeclaration((ParametrizedPredicate)p, d))
+                    throw new Exception("Parameter does not match uncertainty declaration " + p);
+            }
 
             if (bParametrized && bAllConstants)
             {
@@ -705,6 +728,36 @@ namespace CPORLib.Parsing
                 }
             }
             return false;
+        }
+
+        private bool MatchParametersToUncertaintiesDeclaration(ParametrizedPredicate pp, Domain d)
+        {
+            foreach (Predicate pDefinition in d.Uncertainties)
+            {
+                if (pDefinition.Name == pp.Name)
+                {
+                    if (pDefinition is ParametrizedPredicate)
+                    {
+                        ParametrizedPredicate ppDefinition = (ParametrizedPredicate)pDefinition;
+                        if (pp.Parameters.Count() != ppDefinition.Parameters.Count())
+                            return false;
+                        for (int i = 0; i < pp.Parameters.Count(); i++)
+                        {
+                            if (ppDefinition.Parameters.ElementAt(i).Type == "")
+                                ppDefinition.Parameters.ElementAt(i).Type = pp.Parameters.ElementAt(i).Type;
+                            else
+                            {
+                                if (d.ParentOf(ppDefinition.Parameters.ElementAt(i).Type, pp.Parameters.ElementAt(i).Type))
+                                    return true;
+                                if (ppDefinition.Parameters.ElementAt(i).Type != pp.Parameters.ElementAt(i).Type)
+                                    return false;
+                            }
+                        }
+                        return true;
+                    }
+                }
+            }
+            return true;
         }
 
         private void ReadEffect(CompoundExpression exp, PlanningAction pa, Domain d, bool bParametrized)

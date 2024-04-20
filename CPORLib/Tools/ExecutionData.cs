@@ -14,6 +14,11 @@ namespace CPORLib.Tools
         public int Observations { get; set; }
         public int Actions { get; set; }
         public int Planning { get; set; }
+        public int DeadendCount { get; set; }
+        public int ReplanningCount { get; set; }
+        public int ReplanningIncludeModCount { get; set; }
+        public int FailCount { get; set; }
+        public int NumberOfNegations { get; set; }
         public TimeSpan Time { get; set; }
         public Domain Domain { get; set; }
         public Problem Problem { get; set; }
@@ -37,6 +42,24 @@ namespace CPORLib.Tools
             Exception = "";
             DeadendStrategy = ds;
             SampleDeadendState = false;
+            ReplanningIncludeModCount = 0;
+            ReplanningCount = 0;
+            DeadendCount = 0;
+            FailCount = 0;
+        }
+
+        public ExecutionData(Domain d, Problem p)
+        {
+            Domain = d;
+            Problem = p;
+            Path = "";
+            DeadEndFile = "";
+            Exception = "";
+            SampleDeadendState = false;
+            ReplanningIncludeModCount = 0;
+            ReplanningCount = 0;
+            DeadendCount = 0;
+            FailCount = 0;
         }
     }
 }

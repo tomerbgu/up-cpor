@@ -555,13 +555,6 @@ namespace CPORLib.PlanningModel
                 Observed.Remove(p);
                 Hidden.Add(p);
 
-                //cf = new CompoundFormula("or");
-                //cf.SimpleAddOperand(p);
-                //cf.SimpleAddOperand(p.Negate());
-                //m_bsInitialBelief.Hidden.Add(cf);
-
-                //cfAll.AddOperand(p.Negate());
-
                 m_bsInitialBelief.Unknown.Add(p.Canonical());
 
                 pCanonical = (GroundedPredicate)p.Canonical();
@@ -581,7 +574,6 @@ namespace CPORLib.PlanningModel
             }
             m_bsInitialBelief.ReviseInitialBelief(toRegress, this);
             
-            //Observed.Add(a.Preconditions.Negate()); //Guy previously said to remove this
             return true;
         }
 
@@ -659,8 +651,7 @@ namespace CPORLib.PlanningModel
             if (f is PredicateFormula)
             {
                 Predicate p = ((PredicateFormula)f).Predicate;
-                if (Verified.Contains(p.Negate()))
-                    Verified.Remove(p.Negate());
+                Verified.Remove(p.Negate());
                 Verified.Add(p);
             }
             else
@@ -1079,7 +1070,7 @@ namespace CPORLib.PlanningModel
         public Action GetAction(string sActionName)
         {
             string sRevisedActionName;
-            if (sActionName.StartsWith("Make:"))
+            if (sActionName==null || sActionName.StartsWith("Make:"))
                 return null;
                 //sRevisedActionName = sActionName.Replace(Utilities.SplitString(sActionName, ' ')[0], "sense-door");
             else
@@ -1557,7 +1548,7 @@ namespace CPORLib.PlanningModel
             bool actionFailed = (aOrg.Observe == null && sObservation != null);
             if (aOrg.Observe != null && sObservation == null)
                 return null;
-            else if ((aOrg.Observe == null && sObservation != null) || sObservation == "Fail")
+            else if (aOrg.Observe == null && sObservation != null)
             {
                 //TODO make less wastefull
                 State sNew2 = null;
@@ -1836,7 +1827,7 @@ namespace CPORLib.PlanningModel
             if (fToRegress.IsTrue(null) || GeneratingAction==null)
                 return fToRegress;
             if (fToRegress.IsFalse(null))
-                Debug.Assert(false); //whats happening is that the fToRegress is false in the past according to bs
+                throw new Exception("Regression problem"); //Debug.Assert(false); //whats happening is that the fToRegress is false in the past according to bs
             if (GeneratingAction.HasConditionalEffects)
             {
                 Formula fRegressed = fToRegress.Regress(GeneratingAction, Observed);
@@ -1913,43 +1904,43 @@ namespace CPORLib.PlanningModel
         public HashSet<Predicate> PropogateObservedPredicates(HashSet<Predicate> lNewPredicates)
         {
             HashSet<Predicate> hsNextNewPredicates = new HashSet<Predicate>();
+            if (true) {//TODO Tomer
+                GeneratingAction.IdentifyActivatedOptions(m_sPredecessor.Observed, Observed);
 
-            GeneratingAction.IdentifyActivatedOptions(m_sPredecessor.Observed, Observed);
-
-            if (GeneratingAction.Effects != null)
-            {
-
-                Action aRevised = GeneratingAction.ApplyObserved(lNewPredicates);
-                foreach (Predicate p in aRevised.GetMandatoryEffects())
+                if (GeneratingAction.Effects != null)
                 {
-                    if (!m_lObserved.Contains(p) && !m_lObserved.Contains(p.Negate())) //TODO TOMER should the second one be Verified.Contains(p.Negate())
+
+                    Action aRevised = GeneratingAction.ApplyObserved(lNewPredicates);
+                    foreach (Predicate p in aRevised.GetMandatoryEffects())
                     {
-                        hsNextNewPredicates.Add(p);
-                        if (!Options.OptimizeMemoryConsumption && !Options.ComputeCompletePlanTree)
-                            AddObserved(p);
+                        if (!m_lObserved.Contains(p) && !m_lObserved.Contains(p.Negate())) //TODO TOMER should the second one be Verified.Contains(p.Negate())
+                        {
+                            hsNextNewPredicates.Add(p);
+                            if (!Options.OptimizeMemoryConsumption && !Options.ComputeCompletePlanTree)
+                                AddObserved(p);
+                        }
                     }
+
+                    //these are optional effects, so we are not sure whether the newly learned predicate will hold after the action, so we cannot propogate the knowledge - a forgetting mechanism
+                    HashSet<Predicate> lPossibleEffects = new HashSet<Predicate>();
+                    foreach (CompoundFormula cf in aRevised.GetConditions())
+                    {
+                        cf.Operands[1].GetAllPredicates(lPossibleEffects);
+                    }
+                    foreach (Predicate p in lPossibleEffects)
+                    {
+                        Predicate pNegate = p.Negate();
+                        if (lNewPredicates.Contains(p))
+                            lNewPredicates.Remove(p);
+                        else if (lNewPredicates.Contains(pNegate))
+                            lNewPredicates.Remove(pNegate);
+
+                    }
+                    if (!Options.ComputeCompletePlanTree)
+                        GeneratingAction = aRevised;
                 }
 
-                //these are optional effects, so we are not sure whether the newly learned predicate will hold after the action, so we cannot propogate the knowledge - a forgetting mechanism
-                HashSet<Predicate> lPossibleEffects = new HashSet<Predicate>();
-                foreach (CompoundFormula cf in aRevised.GetConditions())
-                {
-                    cf.Operands[1].GetAllPredicates(lPossibleEffects);
-                }
-                foreach (Predicate p in lPossibleEffects)
-                {
-                    Predicate pNegate = p.Negate();
-                    if (lNewPredicates.Contains(p))
-                        lNewPredicates.Remove(p);
-                    else if (lNewPredicates.Contains(pNegate))
-                        lNewPredicates.Remove(pNegate);
-
-                }
-                if (!Options.ComputeCompletePlanTree)
-                    GeneratingAction = aRevised;
             }
-
-
             //pretty sure that this is correct - for every new fact that was learned for the previous state, if it is not contradicted by the action, then it shold be added
             foreach (Predicate p in lNewPredicates)
             {
@@ -2249,7 +2240,7 @@ namespace CPORLib.PlanningModel
         }
 
         public void GetTaggedDomainAndProblem(Options.DeadendStrategies dsStrategy, bool bPreconditionFailure, out int cTags,
-            out Domain dTagged, out Problem pTagged)
+            out Domain dTagged, out Problem pTagged, bool fakeDeadends, string newGoal)
         {
             List<Action> lActions = new List<PlanningAction>();
             PartiallySpecifiedState pssCurrent = this;
@@ -2259,35 +2250,7 @@ namespace CPORLib.PlanningModel
                     lActions.Insert(0, pssCurrent.GeneratingAction);
                 pssCurrent = pssCurrent.m_sPredecessor;
             }
-            m_bsInitialBelief.GetTaggedDomainAndProblem(this, lActions, dsStrategy, bPreconditionFailure, out cTags, out dTagged, out pTagged);
-        }
-
-        public void GetTaggedDomainAndProblemDE(Options.DeadendStrategies dsStrategy, bool bPreconditionFailure,
-            out Domain dTagged, out Problem pTagged)
-        {
-            List<Action> lActions = new List<PlanningAction>();
-            PartiallySpecifiedState pssCurrent = this;
-            while (pssCurrent.m_sPredecessor != null)
-            {
-                if (pssCurrent.GeneratingAction != null)
-                    lActions.Insert(0, pssCurrent.GeneratingAction);
-                pssCurrent = pssCurrent.m_sPredecessor;
-            }
-            m_bsInitialBelief.GetTaggedDomainAndProblemDE(this, lActions, dsStrategy, bPreconditionFailure, out int cTags, out dTagged, out pTagged);
-        }
-
-        public void GetModifiedTaggedDomainAndProblem(Options.DeadendStrategies dsStrategy, bool bPreconditionFailure, String newGoal,
-            out Domain dTagged, out Problem pTagged)
-        {
-            List<Action> lActions = new List<PlanningAction>();
-            PartiallySpecifiedState pssCurrent = this;
-            while (pssCurrent.m_sPredecessor != null)
-            {
-                if (pssCurrent.GeneratingAction != null)
-                    lActions.Insert(0, pssCurrent.GeneratingAction);
-                pssCurrent = pssCurrent.m_sPredecessor;
-            }
-            m_bsInitialBelief.GetModifiedTaggedDomainAndProblem(this, lActions, dsStrategy, bPreconditionFailure, newGoal, out dTagged, out pTagged);
+            m_bsInitialBelief.GetTaggedDomainAndProblem(this, lActions, dsStrategy, bPreconditionFailure, out cTags, out dTagged, out pTagged, fakeDeadends, newGoal);
         }
 
         private State WriteTaggedDomainAndProblemDeadEnd(List<Action> lActions, List<Formula> lMaybeDeadends, DeadendStrategies dsStrategy, bool bPreconditionFailure, out int cTags, out MemoryStream msModels)

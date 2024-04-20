@@ -17,7 +17,7 @@ namespace CPORLib.FFCS
     {
 
         public static int MAX_CONSTANTS = 20000;
-        public static int MAX_PREDICATES = 50;
+        public static int MAX_PREDICATES = 100;
         public static int MAX_TYPES = 50;
         public static int MAX_ARITY = 5;
         public static int MAX_VARS = 15;
@@ -127,12 +127,6 @@ namespace CPORLib.FFCS
             return (val >= 0) ? val : pointer.inst_table[DECODE_VAR(val)];
         }
         //public static int  GET_CONSTANT( val, pointer ) ( val >= 0 ) ? val : pointer.inst_table[DECODE_VAR( val )]
-
-        static Random rnd = new Random();
-        public static int random(int max)
-        {
-            return rnd.Next(max);
-        }
 
         public static void Exit(int iCode)
         {

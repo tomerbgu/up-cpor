@@ -290,13 +290,13 @@ namespace CPORLib.PlanningModel
         }
 
 
-        public Domain CreateTaggedDomain(Dictionary<string, ISet<Predicate>> dTags, Problem pCurrent, List<Formula> lDeadends, bool addFakeActions)
+        public Domain CreateTaggedDomain(Dictionary<string, ISet<Predicate>> dTags, Problem pCurrent, List<Formula> lDeadends)
         {
             if (HasNonDeterministicActions() && Options.UseOptions)
             {
                 Domain dDeterministic = RemoveNonDeterministicEffects();
 
-                return dDeterministic.CreateTaggedDomain(dTags, pCurrent, lDeadends, addFakeActions);
+                return dDeterministic.CreateTaggedDomain(dTags, pCurrent, lDeadends);
             }
 
             Domain dTagged = new Domain("K" + Name);
