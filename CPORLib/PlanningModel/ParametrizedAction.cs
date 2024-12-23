@@ -36,6 +36,7 @@ namespace CPORLib.PlanningModel
                 aNew.Observe = Observe.Clone();
             aNew.HasConditionalEffects = HasConditionalEffects;
             aNew.ContainsNonDeterministicEffect = ContainsNonDeterministicEffect;
+            aNew.PreconditionsVerified = PreconditionsVerified;
             return aNew;
         }
 

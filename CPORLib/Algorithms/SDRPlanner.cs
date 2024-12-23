@@ -31,22 +31,14 @@ namespace CPORLib.Algorithms
             Options.ComputeCompletePlanTree = false;
             Options.AddAllKnownToGiven = true; //this is needed in, e.g., medpks010
             PredicatesToNegate = new HashSet<Predicate>();
-            if (problem.Name == "wumpus-15")
-            {
-                foreach (Predicate predicate in toNegate)
-                {
-                    Predicate predToAdd = problem.Known.FirstOrDefault(p => p.Canonical().Equals(predicate));
-                    if (predToAdd.Negation == Options.FalsePositive)
-                        PredicatesToNegate.Add(predToAdd);
-                }
-            }
+
             if (PredicatesToNegate.Count == 0)
             {
                 foreach (Predicate p in problem.Known)
                 {
                     if (p.Negation == Options.FalsePositive && domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name))
                     {
-                        if (true || RandomGenerator.NextDouble() < Options.threshold)
+                        if (RandomGenerator.NextDouble() < Options.threshold)
                         {
                             PredicatesToNegate.Add(p);
                         }
@@ -54,7 +46,29 @@ namespace CPORLib.Algorithms
                 }
             }
             Problem fakeProb = new Problem(problem);
+            if (Options.OverSpecifyThreshold > 0)
+            {
+                List<Predicate> fakePredicates = fakeProb.Domain.OverspecifyPreconditions();
+                HashSet<Predicate> lGrounded = new HashSet<Predicate>();
+                foreach (ParametrizedPredicate p in fakePredicates)
+                {
+                    fakeProb.Domain.GroundPredicate(p, new Dictionary<Parameter, Constant>(),
+                        new List<Argument>(p.Parameters), lGrounded);
+                }
+                foreach (Predicate p in lGrounded)
+                {
+                    if (RandomGenerator.NextDouble() < Options.fakePredicateThreshold)
+                        fakeProb.AddKnown(p); //adding thate sometimes the predicate is true
+                }
+
+            }
+            else
+            {
+                fakeProb.Domain.resetPreconditions();
+            }
+            Domain = fakeProb.Domain;
             ExecutionData.NumberOfNegations = PredicatesToNegate.Count;
+            Console.WriteLine($"Num of negations: {ExecutionData.NumberOfNegations}");
             foreach (Predicate p in PredicatesToNegate)
             {
                 //Console.WriteLine("negated this: " + p.ToString());
@@ -62,7 +76,8 @@ namespace CPORLib.Algorithms
                 fakeProb.AddKnown(p.Negate());
             }
             BeliefState bsInitial = fakeProb.GetInitialBelief();
-            if (Options.FalsePositive && InaccuracyHandlingStrategy==InaccuracyHandlingStrategies.Baseline)
+            bool removeInaccuracies = (InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BL0 || InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BLOptimistic);
+            if (removeInaccuracies)
                 bsInitial.ModifyProblemBeforeStateSelection(CurrentState);
             CurrentState = bsInitial.GetPartiallySpecifiedState();
             FutureActions = null;
@@ -122,23 +137,7 @@ namespace CPORLib.Algorithms
                 else
                     bPreconditionFailure = true;
             }
-            bool testing = false;
-            if (testing)
-            {
-                List<Action> lActions = Domain.GroundAllActions(CurrentState.Observed, false);
-                Console.WriteLine("\nAvailable actions:");
-                for (int i = 0; i < lActions.Count; i++)
-                {
-                    Action ac = lActions[i];
-                    if (ac.Preconditions == null || ac.Preconditions.IsTrue(CurrentState.Observed, false))
-                        Console.WriteLine(i + ") " + ac.Name);
-                }
-            }
-            bool manual = false;
-            if (manual)
-            {
-                return ManualSolve(Domain, Problem, CurrentState);
-            }
+
             List<string> lPlan = Plan(CurrentState, bPreconditionFailure, out bool bDeadEndReached, out State sChosen);
             if (lPlan == null || lPlan.Count ==0)
             {
@@ -164,12 +163,19 @@ namespace CPORLib.Algorithms
             string sAction = FutureActions[NextActionIndex];
             string sRevisedActionName = sAction.Replace(Utilities.DELIMITER_CHAR, " ");
             string[] aName = Utilities.SplitString(sRevisedActionName, ' ');
-            Action a = Problem.Domain.GroundActionByName(aName);
-            if(a.Observe == null && sObservation != null)
+            Action a = Domain.GroundActionByName(aName);
+            if (a.Observe!=null)
+            {
+                ExecutionData.SensingActions++;
+            }
+            else if (a.Effects != null)
+            {
+                ExecutionData.EffectActions++;
+            }
+            ExecutionData.steps++;
+            if (a.Observe == null && sObservation != null)
             {
                 Error = "Action was not a sensing action, null observation expected.";
-                //CurrentState.RemoveObservedPreCond(a);
-                //return true;
             }
             if (a.Observe != null && sObservation == null)
             {
@@ -177,14 +183,14 @@ namespace CPORLib.Algorithms
                 return false;
             }
             PartiallySpecifiedState psNext = CurrentState.Apply(a, sObservation);
-            if(psNext == null)
+            if (psNext == null)
             {
                 Error = "Failed to apply the action at the current state.";
                 return false;
             }
             CurrentState = psNext;
             NextActionIndex++;
-            if(NextActionIndex == FutureActions.Count || (sObservation != null && sObservation != "Fail"))
+            if (NextActionIndex == FutureActions.Count || sObservation == "Fail")//(sObservation != null && sObservation != "Fail"))
             {
                 FutureActions = null;
                 NextActionIndex = -1;
@@ -381,7 +387,7 @@ namespace CPORLib.Algorithms
 
             ExecutionData.Actions = cActions;
             ExecutionData.Planning = cPlanning;
-            ExecutionData.Observations = cObservations;
+            ExecutionData.SensingActions = cObservations;
             ExecutionData.Time = DateTime.Now - dtStart;
 
             Console.WriteLine("Actions: " + cHistory);

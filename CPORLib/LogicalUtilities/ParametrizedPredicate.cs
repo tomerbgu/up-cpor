@@ -52,7 +52,12 @@ namespace CPORLib.LogicalUtilities
             m_lParameters.Add(a);
         }
 
-
+        public void ReplaceParameter(int i, Argument a)
+        {
+            if (a is Parameter)
+                Parameterized = true;
+            m_lParameters[i] = a;
+        }
 
 
 
@@ -300,6 +305,11 @@ namespace CPORLib.LogicalUtilities
         public override Predicate Clone()
         {
             return new ParametrizedPredicate(this);
+        }
+
+        internal string GetParameterType(int i)
+        {
+            return m_lParameters[i].Type;
         }
     }
 }

@@ -11,8 +11,14 @@ namespace CPORLib.Tools
         public bool FinalStateDeadend { get; set; }
         public bool InitialStateDeadend { get; set; }
 
-        public int Observations { get; set; }
+        public int SensingActions { get; set; }
+        public int EffectActions { get; set; }
         public int Actions { get; set; }
+        public List<int> MakeActions { get; set; }
+        public List<int> planLength { get; set; }
+        public List<int> lFilteredActions { get; set; }
+        public List<int> stepsToReplan { get; set; }
+        public int steps;
         public int Planning { get; set; }
         public int DeadendCount { get; set; }
         public int ReplanningCount { get; set; }
@@ -46,6 +52,10 @@ namespace CPORLib.Tools
             ReplanningCount = 0;
             DeadendCount = 0;
             FailCount = 0;
+            MakeActions = new List<int>();
+            planLength = new List<int>();
+            lFilteredActions = new List<int>();
+            stepsToReplan = new List<int>();
         }
 
         public ExecutionData(Domain d, Problem p)
@@ -60,6 +70,10 @@ namespace CPORLib.Tools
             ReplanningCount = 0;
             DeadendCount = 0;
             FailCount = 0;
+            MakeActions = new List<int>();
+            planLength = new List<int>();
+            lFilteredActions = new List<int>();
+            stepsToReplan = new List<int>();
         }
     }
 }

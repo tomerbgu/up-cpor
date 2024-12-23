@@ -4,10 +4,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Xml.Linq;
 using CPORLib.Algorithms;
+using CPORLib.FFCS;
 using CPORLib.LogicalUtilities;
 using CPORLib.Parsing;
 using CPORLib.Tools;
+using static CPORLib.Tools.Options;
 
 namespace CPORLib.PlanningModel
 {
@@ -28,18 +32,17 @@ namespace CPORLib.PlanningModel
         private List<string> m_lObservable;
 
         public bool IsSimple { get; private set; }
-
-
-        public bool UseCosts { get; private set; }
-
-
         private Dictionary<Predicate, Predicate> m_dAuxilaryPredicates;
 
         public bool ContainsNonDeterministicActions { get; private set; }
 
+        private List<Tuple<ParametrizedAction, Formula, List<int>>> removedPreconditions;
+        private List<int> alreadyAttemptedActions;
+        public Dictionary<string, Formula> originalPreconditions { get; private set; }//action name -> preconditions
+        HashSet<string> PreviouslyModifiedActions;
+
         public Domain(string sName)
         {
-            UseCosts = true;
             Name = sName;
             Actions = new List<PlanningAction>();
             Constants = new List<Constant>();
@@ -57,8 +60,62 @@ namespace CPORLib.PlanningModel
             IsSimple = true;
             ContainsNonDeterministicActions = false;
             TypeHierarchy = new Dictionary<string, string>();
+            removedPreconditions = new List<Tuple<ParametrizedAction, Formula, List<int>>>();
+            alreadyAttemptedActions = Actions.Select((action, index) => new { action, index }).Where(ai => ai.action.Preconditions == null).Select(ai => ai.index).ToList();
+            PreviouslyModifiedActions = new HashSet<string>();
+            originalPreconditions = new Dictionary<string, Formula>();
         }
 
+         public Domain(Domain d)
+        {
+            Name = d.Name;
+            
+            m_lAlwaysKnown = new List<string>();
+            m_lAlwaysConstant = new List<string>();
+            m_lObservable = new List<string>();
+            m_dAuxilaryPredicates = new Dictionary<Predicate, Predicate>();
+            Functions = new List<string>();
+
+            Types = new List<string>(d.Types);
+
+            Predicates = new List<Predicate>();
+            foreach (Predicate p in d.Predicates)
+            {
+                //Predicates.Add(p.Clone());
+                AddPredicate(p.Clone());
+            }
+            Uncertainties = new List<Predicate>();
+            foreach (Predicate p in d.Uncertainties)
+            {
+                //Uncertainties.Add(p.Clone());
+                AddUncertainty(p.Clone());
+            }
+
+            Actions = new List<PlanningAction>();
+            foreach (PlanningAction pa in d.Actions)
+            {
+                //Actions.Add(pa.Clone());
+                AddAction(pa.Clone());
+            }
+            Constants = new List<Constant>();
+            foreach (Constant c in d.Constants)
+            {
+                //Constants.Add(c);
+                AddConstant(c);
+            }
+
+            m_lAlwaysKnown = new List<string>(d.m_lAlwaysKnown);
+            Functions = new List<string>(d.Functions);
+            TypeHierarchy = new Dictionary<string, string>(d.TypeHierarchy);
+            originalPreconditions = new Dictionary<string, Formula>();
+            removedPreconditions = new List<Tuple<ParametrizedAction, Formula, List<int>>>();
+            alreadyAttemptedActions = Actions.Select((action, index) => new { action, index }).Where(ai => ai.action.Preconditions == null).Select(ai => ai.index).ToList();
+            //resetPreconditions();
+            PreviouslyModifiedActions = new HashSet<string>(d.PreviouslyModifiedActions);
+            FakePredicates = d.FakePredicates;
+            ComputeAlwaysKnown();
+        }
+        
 
         #region accessors for unified_planning 
 
@@ -79,9 +136,18 @@ namespace CPORLib.PlanningModel
         }
 
 
-
         #endregion
 
+        public void resetPreconditions()
+        {
+            foreach (PlanningAction a in Actions)
+            {
+                if (a.Preconditions is null)
+                    originalPreconditions[a.Name] = null;
+                else
+                    originalPreconditions[a.Name] = a.Preconditions.Clone();
+            }
+        }
 
         public void AddAction(PlanningAction a)
         {
@@ -125,7 +191,8 @@ namespace CPORLib.PlanningModel
             if (a.Observe != null)
             {
                 foreach (Predicate p in a.Observe.GetAllPredicates())
-                    m_lObservable.Add(p.Name);
+                    if (!m_lObservable.Contains(p.Name))
+                        m_lObservable.Add(p.Name);
             }
             if (a.ContainsNonDeterministicEffect)
                 ContainsNonDeterministicActions = true;
@@ -603,9 +670,9 @@ namespace CPORLib.PlanningModel
             sw.WriteLine(")");
              * */
 
-        }
+    }
 
-        public void WriteKnowledgePredicate(StreamWriter sw, Predicate p)
+    public void WriteKnowledgePredicate(StreamWriter sw, Predicate p)
         {
             if (!AlwaysKnown(p))
                 sw.Write(Predicate.GenerateKnowPredicate(p).ToString());
@@ -2237,7 +2304,7 @@ namespace CPORLib.PlanningModel
             return cMaxOptions;
         }
 
-        private PlanningAction GetActionByName(string sActionName)
+        public PlanningAction GetActionByName(string sActionName)
         {
             foreach (PlanningAction a in Actions)
             {
@@ -2264,7 +2331,7 @@ namespace CPORLib.PlanningModel
             }
             return aBestMatch;
         }
-        private Dictionary<Parameter, Constant> GetBindings(ParametrizedAction pa, string[] asAction)
+        public Dictionary<Parameter, Constant> GetBindings(ParametrizedAction pa, string[] asAction)
         {
             if (pa.Parameters.Count > asAction.Length - 1)//last parameter can be theUtilities.TAG of a KW action
                 return null;
@@ -2605,7 +2672,160 @@ namespace CPORLib.PlanningModel
             return lAllGrounded;
         }
 
+        public List<PlanningAction> GroundAllRelaxedActions(PartiallySpecifiedState pss, List<PlanningAction> relaxedActions, bool bRemoveConstantPredicates)
+        {
+            List<PlanningAction> lAllGrounded = new List<PlanningAction>();
+            Dictionary<Parameter, Constant> dBindings = new Dictionary<Parameter, Constant>();
+            List<Parameter> lToBind = null;
+            List<Constant> lConstants = new List<Constant>();
+            HashSet<Predicate> lInitiallyKnownPredicates = new HashSet<Predicate>();
+            HashSet<Predicate> lPredicates = new HashSet<Predicate>();
 
+            foreach (GroundedPredicate p in pss.Observed)
+            {
+                lPredicates.Add(p);
+                lInitiallyKnownPredicates.Add(p);
+            }
+            foreach (Predicate p in pss.Hidden)
+            {
+                lPredicates.Add(p);
+                //cf.GetAllPredicates(lPredicates);
+            }
+            Dictionary<string, HashSet<GroundedPredicate>> dPredicates = new Dictionary<string, HashSet<GroundedPredicate>>();
+            foreach (GroundedPredicate gp in lPredicates)
+            {
+                if (!gp.Negation)
+                {
+                    if (!dPredicates.ContainsKey(gp.Name))
+                        dPredicates[gp.Name] = new HashSet<GroundedPredicate>();
+                    dPredicates[gp.Name].Add(gp);
+                }
+            }
+
+            //BUGBUG; //why don't we get the refutet stain grounded?
+
+            bool bNewPredciatesAdded = true;
+            int cIterations = 0;
+            while (bNewPredciatesAdded)
+            {
+                List<PlanningAction> lGrounded = new List<PlanningAction>();
+                Dictionary<string, HashSet<GroundedPredicate>> dNewPredicates = new Dictionary<string, HashSet<GroundedPredicate>>();
+                foreach (PlanningAction a in relaxedActions)
+                {
+                    if (a is ParametrizedAction)
+                    {
+                        ParametrizedAction pa = (ParametrizedAction)a;
+                        //if (pa.Name.Contains("ls-f") )
+                        //   Console.Write("*");
+                        lToBind = new List<Parameter>(pa.Parameters);
+                        dBindings.Clear();
+
+                        bool bNoValidGrounding = false;
+                        HashSet<ParametrizedPredicate> lPredicatesToBind = new HashSet<ParametrizedPredicate>();
+                        HashSet<Predicate> lOptionalPreconditions = new HashSet<Predicate>();
+                        if (pa.Preconditions != null)
+                        {
+                            foreach (Predicate p in pa.Preconditions.GetAllPredicates())
+                            {
+                                if (p is ParametrizedPredicate && ((ParametrizedPredicate)p).Parameterized)
+                                {
+                                    if (!dPredicates.ContainsKey(p.Name) && !p.Negation)
+                                        bNoValidGrounding = true;
+                                    lPredicatesToBind.Add((ParametrizedPredicate)p);
+                                }
+                            }
+                            lOptionalPreconditions = pa.Preconditions.GetAllOptionalPredicates();
+                        }
+                        if (pa.Effects != null)
+                        {
+                            List<CompoundFormula> lConditions = pa.GetConditions();
+                            foreach (CompoundFormula cfCondition in lConditions)
+                            {
+                                foreach (Predicate p in cfCondition.Operands[0].GetAllPredicates())
+                                {
+                                    if (p is ParametrizedPredicate)
+                                    {
+                                        if (!dPredicates.ContainsKey(p.Name) && !p.Negation)
+                                            bNoValidGrounding = true;
+                                        lPredicatesToBind.Add((ParametrizedPredicate)p);
+                                        lOptionalPreconditions.Add(p);//all conditions are optional
+                                    }
+                                }
+                            }
+                        }
+
+                        //remove negations from the list of predicates to bind
+                        HashSet<ParametrizedPredicate> lPredicatesToBindNoNegations = new HashSet<ParametrizedPredicate>();
+                        foreach (ParametrizedPredicate p in lPredicatesToBind)
+                            if (!p.Negation)
+                                lPredicatesToBindNoNegations.Add(p);
+                        lPredicatesToBind = lPredicatesToBindNoNegations;
+
+
+                        if (!bNoValidGrounding)
+                        {
+                            Dictionary<ParametrizedPredicate, GroundedPredicate> dPredicateBindings = new Dictionary<ParametrizedPredicate, GroundedPredicate>();
+                            GroundAction(pa, dPredicates, lOptionalPreconditions, lToBind, dBindings, lPredicatesToBind, dPredicateBindings, lGrounded, dNewPredicates, lPredicates);
+                        }
+                    }
+                    else
+                    {
+                        ProcessEffects(a, dNewPredicates, lPredicates);
+                        lGrounded.Add(a);
+                    }
+                }
+
+                bNewPredciatesAdded = false;
+                foreach (string sKey in dNewPredicates.Keys)
+                {
+                    if (!dPredicates.ContainsKey(sKey))
+                        dPredicates[sKey] = new HashSet<GroundedPredicate>();
+                    foreach (GroundedPredicate gp in dNewPredicates[sKey])
+                    {
+                        if (!dPredicates[sKey].Contains(gp))
+                        {
+                            dPredicates[sKey].Add(gp);
+                            lPredicates.Add(gp);
+                            bNewPredciatesAdded = true;
+                        }
+                    }
+                }
+
+                foreach (PlanningAction a in lGrounded)
+                {
+                    if (!lAllGrounded.Contains(a))
+                        lAllGrounded.Add(a);
+                }
+                cIterations++;
+
+            }
+
+            if (bRemoveConstantPredicates)
+            {
+                foreach (PlanningAction a in lAllGrounded)
+                {
+                    if (a.Preconditions is CompoundFormula)
+                    {
+                        CompoundFormula cfPreconditions = (CompoundFormula)a.Preconditions;
+                        CompoundFormula cfClean = new CompoundFormula(cfPreconditions.Operator);
+                        foreach (Formula f in cfPreconditions.Operands)
+                        {
+                            if (f is CompoundFormula)
+                                cfClean.AddOperand(f);
+                            else
+                            {
+                                GroundedPredicate gp = (GroundedPredicate)((PredicateFormula)f).Predicate;
+                                if (!AlwaysConstant(gp) || !AlwaysKnown(gp) || !lInitiallyKnownPredicates.Contains(gp))
+                                    cfClean.AddOperand(gp);
+                            }
+                        }
+                        a.Preconditions = cfClean;
+                    }
+                }
+            }
+
+            return lAllGrounded;
+        }
 
         public List<PlanningAction> GroundAllActuationActions(ISet<Predicate> lPredicates, bool bContainsNegations)
         {
@@ -2840,8 +3060,6 @@ namespace CPORLib.PlanningModel
 
                     foreach (GroundedPredicate gpMatch in lMatches)
                     {
-                        if (gpMatch.ToString().Contains("5-3"))
-                            Console.Write("*");
                         Dictionary<Parameter, Constant> dNewBinding = pCurrent.Match(gpMatch, dBinding, this);
                         if (dNewBinding != null)
                         {
@@ -3620,6 +3838,668 @@ namespace CPORLib.PlanningModel
             if (TypeHierarchy.ContainsKey(sType2))
                 return ParentOf(sType1, TypeHierarchy[sType2]);
             return false;
+        }
+
+        internal List<Predicate> OverspecifyPreconditions()
+        {
+            int actionToOverSpecify = RandomGenerator.Next(Actions.Count);
+            bool addPrecond = true;
+            List<Predicate> fakePredicates = new List<Predicate>();
+            for (int aIndex = 0; aIndex < Actions.Count; aIndex++)
+            {
+                PlanningAction a = Actions[aIndex];
+                if (AllowMultipleOverSpecifications)
+                {
+                    if (RandomGenerator.NextDouble() > Options.OverSpecifyThreshold)
+                    {
+                        continue;
+                    }
+                }
+                else
+                {
+                    if (actionToOverSpecify != aIndex)
+                        continue;
+                }
+                CompoundFormula newPrecondition = new CompoundFormula("and");
+                if (a.Preconditions != null)
+                    newPrecondition.AddOperand(a.Preconditions);
+
+                ParametrizedPredicate predToAdd = null;
+                ParametrizedAction aPar = (ParametrizedAction)a;
+                int randomIndex = -1;
+                for (int pIndex=0; pIndex < Predicates.Count; pIndex++)
+                {
+                    if (Options.UseFakePreds && Options.NumFakePreds == 1)
+                    {
+                        predToAdd = (ParametrizedPredicate)FakePredicates[0].Clone();
+                        randomIndex = RandomGenerator.Next(aPar.Parameters.Count);
+                        predToAdd.AddParameter(aPar.Parameters[randomIndex]);
+                        AddPredicate(predToAdd);
+                        fakePredicates.Add(predToAdd);
+                    }
+                    else
+                    {
+                        if (randomIndex < 0)
+                        {
+                            randomIndex = RandomGenerator.Next(Predicates.Count);
+                        }
+                        else
+                        {
+                            randomIndex = (randomIndex + 1) % Predicates.Count;
+                        }
+                        predToAdd = (ParametrizedPredicate)Predicates[randomIndex].Clone();
+                    }
+                    
+                    for (int i = 0; i < predToAdd.Parameters.Count(); i++)
+                    {
+                        bool replaceParam = true;
+                        while (replaceParam)
+                        {
+                            var paramsFiltered = aPar.Parameters.Where(p => p.Type == predToAdd.GetParameterType(i) && (i==0 || p!=predToAdd.Parameters.ElementAt(i-1)));
+                            int parametersOfType = paramsFiltered.Count();
+                            if (parametersOfType == 0)
+                            {
+                                break;
+                            }
+                            randomIndex = RandomGenerator.Next(parametersOfType);
+                            var paramToAdd = paramsFiltered.ElementAt(randomIndex);
+                            predToAdd.ReplaceParameter(i, paramToAdd);
+                            replaceParam = false;
+                        }
+                        if (replaceParam)
+                        {
+                            addPrecond = false;
+                            break;
+                        }
+                    }
+
+                    string observations = aPar.Observe == null ? "" : aPar.Observe.ToString();
+                    addPrecond = addPrecond && !newPrecondition.ToString().Contains(predToAdd.ToString()) && !observations.Contains(predToAdd.ToString());
+                    if (addPrecond)
+                        break;
+                }
+                if (addPrecond)
+                {
+                    newPrecondition.AddOperand(predToAdd);
+                    a.Preconditions = newPrecondition;
+                    Console.WriteLine("Action: " + a.Name);
+                    Console.WriteLine("Preconditions AFTER modifications: " + a.Preconditions);
+                }
+            }
+            if (!addPrecond)
+                OverspecifyPreconditions();
+            else
+                resetPreconditions();
+            return fakePredicates;
+        }
+
+        public List<PlanningAction> GetRelaxedActionsByPriority(PartiallySpecifiedState pss, bool first)
+        {
+            //sort by number/percent of preconditions that are feasible, remove only preconditions that are not feasible
+            Dictionary<PlanningAction, float> actionDictionary = new Dictionary<PlanningAction, float>();
+            Dictionary<Formula, bool> preconditionCache = new Dictionary<Formula, bool>();
+            var relaxedActionsList = GetAllRelaxedActions(pss);
+            if (Options.UseCosts)
+                return relaxedActionsList.ToList();
+            foreach (PlanningAction a in relaxedActionsList)
+            {
+                if (a.Preconditions == null)
+                    actionDictionary[a] = 1;
+                else
+                {
+                    float preconditionsHold = 0;
+                    CompoundFormula newPrecondition = new CompoundFormula("and");
+                    newPrecondition.AddOperand(a.Preconditions);
+                    foreach (Formula f in newPrecondition.Operands)
+                    {
+                        if (preconditionCache.ContainsKey(f))
+                        {
+                            if (preconditionCache[f])
+                                preconditionsHold += 1;
+                            continue;
+                        }
+                        Formula fReduced = f.Reduce(pss.Observed);
+
+                        if (fReduced.IsTrue(pss.Observed))
+                        {
+                            preconditionsHold += 1;
+                            preconditionCache[f] = true;
+                            continue;
+                        }
+                        if (fReduced.IsFalse(pss.Observed))
+                        {
+                            preconditionCache[f] = false;
+                            continue;
+                        }
+                        Formula fNegatePreconditions = fReduced.Negate();
+                        if (pss.ConsistentWith(fNegatePreconditions, true))
+                        {
+                            preconditionCache[f] = false;
+                            continue;
+                        }
+                        preconditionCache[f] = true;
+                        preconditionsHold += 1;
+                    }
+                    actionDictionary[a] = preconditionsHold / newPrecondition.Operands.Count;
+                }
+            }
+            if (Options.FixOneAtATime)
+                return GetRelevantActionModificationsOneAtATime(actionDictionary, first);
+            else
+                return GetRelevantActionModifications(actionDictionary, first);
+        }
+
+        private string getActionNameClean(string actionNameDirty)
+        {
+            return actionNameDirty.Substring(0, actionNameDirty.Length - 1);
+        }
+
+        private List<PlanningAction> GetRelevantActionModificationsOneAtATime(Dictionary<PlanningAction, float> precondStatistics, bool first)
+        {
+            List<PlanningAction> selectedActions = new List<PlanningAction>();
+            PlanningAction aTag;
+            var combosNotTried1 = precondStatistics.Where(entry => !PreviouslyModifiedActions.Contains(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0])).ToList();
+            combosNotTried1 = combosNotTried1.Where(entry => char.IsDigit(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0][entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0].Length - 1])).ToList();
+            var entryWithMaxValue1 = combosNotTried1.OrderBy(entry => entry.Value).Reverse().FirstOrDefault();
+            string resultActionName1 = entryWithMaxValue1.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0];
+            if (Options.Verbose) 
+                Console.WriteLine(resultActionName1);
+            PreviouslyModifiedActions.Add(resultActionName1);
+            int precondToRemove1 = (int)char.GetNumericValue(resultActionName1[resultActionName1.Length - 1]);
+            foreach (PlanningAction a in Actions)
+            {
+                string actionName1 = a.Name.Split(Utilities.DELIMITER_CHAR[0])[0];
+                string resActionName = resultActionName1.Substring(0, resultActionName1.Length - 1);
+                if (actionName1 == resActionName)
+                {
+                    a.Preconditions = originalPreconditions[a.Name];
+                    aTag = a.Clone();
+                    if (aTag.Preconditions is CompoundFormula cf && cf.Operands.Count>1)
+                        cf.Operands.RemoveAt(precondToRemove1);
+                    else if (precondToRemove1 == 0)
+                        aTag.Preconditions = null;
+                    else
+                        Console.WriteLine("buggg");
+                }
+                else
+                {
+                    aTag = a;
+                }
+                selectedActions.Add(aTag);
+
+            }
+            //foreach (PlanningAction a in selectedActions)
+            //    AddAction(a);
+            return selectedActions;
+
+        }
+
+        private List<PlanningAction> GetRelevantActionModifications(Dictionary<PlanningAction, float> precondStatistics, bool first)
+        {
+            List<PlanningAction> selectedActions = new List<PlanningAction>();
+            PlanningAction aTag;
+
+            foreach (PlanningAction a in Actions)
+            {
+                //this has been modified already
+                if (a.Preconditions!=null && a.Preconditions.ToString() != originalPreconditions[a.Name].ToString() && a.PreconditionsVerified)
+                {
+                    aTag = a;
+                }
+                else
+                {
+                    a.Preconditions = originalPreconditions[a.Name];
+                    //get best config
+                    string actionName = a.Name.Split(Utilities.DELIMITER_CHAR[0])[0];
+                    var filteredEntries = precondStatistics.Where(entry => getActionNameClean(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0]) == actionName).ToList();
+                    var combosNotTried = filteredEntries.Where(entry => !PreviouslyModifiedActions.Contains(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0])).ToList();
+                    //combosNotTried = combosNotTried.Where(entry => char.IsDigit(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0][entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0].Length - 1])).ToList();
+                    var entryWithMaxValue = combosNotTried.OrderBy(entry => entry.Value).Reverse().FirstOrDefault();
+                    var defaultEntry = new KeyValuePair<PlanningAction, float>(a, 0);
+                    var resultEntry = entryWithMaxValue.Equals(default(KeyValuePair<PlanningAction, float>)) ? defaultEntry : entryWithMaxValue;
+                    
+                    string resultActionName = resultEntry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0];
+                    PreviouslyModifiedActions.Add(resultActionName);
+                    int precondToRemove = (int)char.GetNumericValue(resultActionName[resultActionName.Length - 1]);
+                    //modify the action accordingly
+                    aTag = a.Clone();
+                    if (precondToRemove >= 0)
+                    {
+                        if (!(aTag.Preconditions is CompoundFormula))
+                            aTag.Preconditions = null;
+                        else
+                            ((CompoundFormula)aTag.Preconditions).Operands.RemoveAt(precondToRemove);
+                    }
+                }
+                selectedActions.Add(aTag);
+            }
+            return selectedActions;
+        }
+
+        private List<PlanningAction> GetActionsWOPrecondition()
+        {
+            List<PlanningAction> relaxedActions = new List<PlanningAction>();
+            List<PlanningAction> deleteRelaxationActions = getDeleteRelaxationActions();
+
+            foreach (ParametrizedAction a in deleteRelaxationActions)
+            {
+                a.Preconditions = originalPreconditions[a.Name];
+
+                relaxedActions.Add(a); //todo is this necessary
+                if (a.Preconditions == null)
+                {
+                    continue;
+                }
+                if (!(a.Preconditions is CompoundFormula))
+                {
+                    PlanningAction aMod = a.Clone();
+                    aMod.Name += 0;
+                    aMod.Preconditions = null;
+                    if (!PreviouslyModifiedActions.Contains(aMod.Name))
+                        relaxedActions.Add(aMod);
+
+                }
+                else
+                {
+                    CompoundFormula cf = (CompoundFormula)a.Preconditions;
+                    for (int i = 0; i < cf.Operands.Count(); i++)
+                    {
+                        CompoundFormula newPreconditions = (CompoundFormula)cf.Clone();
+                        newPreconditions.Operands.Remove(cf.Operands[i]);
+                        PlanningAction aMod = a.Clone();
+                        aMod.Name += i;
+                        aMod.Preconditions = newPreconditions;
+                        if (!PreviouslyModifiedActions.Contains(aMod.Name))
+                            relaxedActions.Add(aMod);
+                    }
+                }
+            }
+
+            return relaxedActions;
+        }
+
+        private List<PlanningAction> GetActionsWCosts()
+        {
+            List<PlanningAction> relaxedActions = new List<PlanningAction>();
+
+            List<PlanningAction> deleteRelaxationActions = Actions;//getDeleteRelaxationActions(); //
+            foreach (ParametrizedAction a in deleteRelaxationActions)
+            {
+                a.Preconditions = originalPreconditions[a.Name];
+                if (a.Preconditions == null)
+                {
+                    relaxedActions.Add(a);
+                    continue;
+                }
+                if (!(a.Preconditions is CompoundFormula))
+                {
+                    if (WasPreviouslyModified(a, -1)) // (a.PreconditionsVerified)//
+                    {
+                        relaxedActions.Add(a);
+                        continue;
+                    }
+                    PlanningAction aMod = a.Clone();
+                    CompoundFormula newPrecond = new CompoundFormula("or");
+                    newPrecond.AddOperand(a.Preconditions);
+
+                    Predicate replacementPrecond = new GroundedPredicate(a.Name + "-fakePreReq-" + a.Preconditions.ToString());
+                    PredicateFormula fakeFormula = new PredicateFormula(replacementPrecond);
+                    newPrecond.AddOperand(fakeFormula);
+
+                    aMod.Preconditions = newPrecond.Simplify();
+
+                    AddCostActions(replacementPrecond, relaxedActions);
+
+                    relaxedActions.Add(aMod);
+                }
+                else
+                {
+                    PlanningAction aMod = a.Clone();
+                    CompoundFormula cf = (CompoundFormula)aMod.Preconditions;
+
+                    for (int i = 0; i < cf.Operands.Count(); i++)
+                    {
+                        if (WasPreviouslyModified(aMod, i)) //here we dont need to add to relaxedActions bc it is outside the loop
+                            continue;
+
+                        CompoundFormula newPrecond = new CompoundFormula("or");
+                        newPrecond.AddOperand(cf.Operands[i]);
+
+                        Predicate replacementPrecond = new GroundedPredicate(a.Name + "-fakePreReq-" + cf.Operands[i].ToString());
+
+
+                        PredicateFormula fakeFormula = new PredicateFormula(replacementPrecond);
+                        newPrecond.AddOperand(fakeFormula);
+
+                        cf.Operands[i] = newPrecond;
+
+                        AddCostActions(replacementPrecond, relaxedActions);
+                    }
+                    relaxedActions.Add(aMod);
+                }
+            }
+
+            //foreach (PlanningAction a in relaxedActions)
+            //    AddAction(a);
+            return relaxedActions;
+        }
+
+        private List<PlanningAction> getDeleteRelaxationActions()
+        {
+            List<PlanningAction> deleteRelaxationActions = new List<PlanningAction>();
+            foreach (ParametrizedAction a in Actions)
+            {
+                if (a.Effects == null)
+                {
+                    deleteRelaxationActions.Add(a.Clone());
+                }
+                else if (!(a.Effects is CompoundFormula))
+                {
+                    //a.Effects.RemoveNegations
+                    if (((PredicateFormula)(a.Effects)).Predicate.Negation)
+                    {
+                        PlanningAction aMod = a.Clone();
+                        aMod.Effects = null;
+                        deleteRelaxationActions.Add(aMod);
+                    }
+                    else
+                        deleteRelaxationActions.Add(a.Clone());
+                }
+                else if (a.Effects is CompoundFormula)
+                {
+                    PlanningAction aMod = a.Clone();
+                    aMod.Effects = aMod.Effects.RemoveNegations().Simplify();
+                    deleteRelaxationActions.Add(aMod);
+                }
+            }
+            return deleteRelaxationActions;
+
+        }
+
+        private bool WasPreviouslyModified(PlanningAction aMod, int i)
+        {
+            List<string> actionsModified = PreviouslyModifiedActions.Where(pma => pma.Substring(12, pma.IndexOf("-fakePreReq") - 12)==aMod.Name).ToList();
+            if (actionsModified.Count>0)
+            {
+                string precondName = i >= 0 ? ((CompoundFormula)aMod.Preconditions).Operands[i].ToString() : aMod.Preconditions.ToString();
+                List<string> predName = actionsModified.Where(ma => ma.Substring(ma.IndexOf("("), ma.IndexOf(")") - ma.IndexOf("(") + 1).Contains(precondName)).ToList();
+                if (predName.Count > 0)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void AddCostActions(Predicate p, List<PlanningAction> actionList)
+        {
+            for (int i = 0; i < Options.ActionCost; i++)
+            {
+                PlanningAction pa = new PlanningAction("prepare-for-" + p.Name + "-" + i);
+                Predicate pi = new GroundedPredicate(pa.Name);
+                PredicateFormula pfPrecond = new PredicateFormula(pi);
+                CompoundFormula cfEffect = new CompoundFormula("and");
+
+                if (i > 0)
+                {
+                    pa.Preconditions = pfPrecond;
+                    AddPredicate(pi);
+                    cfEffect.AddOperand(pfPrecond);
+                }
+                else if (!Options.AllowMultipleOverSpecifications)
+                {
+                    PredicateFormula pfPrecondNoOverSpecifications = new PredicateFormula(NoOverSpecifications);
+                    pa.Preconditions = pfPrecondNoOverSpecifications.Negate();
+                    cfEffect.AddOperand(pfPrecondNoOverSpecifications);
+                }
+                Predicate piPlus1 = new GroundedPredicate("prepare-for-" + p.Name + "-" + (i+1));
+                PredicateFormula pfEffect = new PredicateFormula(piPlus1);
+
+                if (i==Options.ActionCost-1)
+                {
+                    cfEffect.AddOperand(new PredicateFormula(p));
+                    AddPredicate(p);
+                }
+                else
+                    cfEffect.AddOperand(pfEffect);
+
+                pa.Effects = cfEffect;
+                actionList.Add(pa);
+            }
+
+
+        }
+        private IEnumerable<PlanningAction> GetAllRelaxedActions(PartiallySpecifiedState pss)
+        {
+            List<PlanningAction> relaxedActions;
+            if (!Options.UseCosts)
+            {
+                relaxedActions = GetActionsWOPrecondition();
+                return GroundAllRelaxedActions(pss, relaxedActions, true);
+            }
+            else
+            {
+                relaxedActions = GetActionsWCosts();
+                return relaxedActions;
+            }
+        }
+
+        //returns true if exhausted all opions of action-precondition pairs to modify
+        internal bool ReplaceAndRemoveActionPrecondition(PartiallySpecifiedState pss)
+        {
+            //sort by number/percent of preconditions that are feasible, remove only preconditions that are not feasible
+            Dictionary<PlanningAction, float> actionDictionary = new Dictionary<PlanningAction, float>();
+            Dictionary<Formula, bool> preconditionCache = new Dictionary<Formula, bool>();
+            foreach (PlanningAction a in GroundAllActions(pss.Problem, false))
+            {
+                //random number, if > threshold
+                if (a.Preconditions == null)
+                    actionDictionary[a] = 1;
+                else
+                {
+                    float preconditionsHold = 0;
+                    CompoundFormula newPrecondition = new CompoundFormula("and");
+                    newPrecondition.AddOperand(a.Preconditions);
+                    foreach (Formula f in newPrecondition.Operands)
+                    {
+                        if (preconditionCache.ContainsKey(f))
+                        {
+                            if (preconditionCache[f])
+                                preconditionsHold += 1;
+                            break;
+                        }
+                        Formula fReduced = f.Reduce(pss.Observed);
+
+                        if (fReduced.IsTrue(pss.Observed))
+                        {
+                            preconditionsHold += 1;
+                            preconditionCache[f] = true;
+                            break;
+                        }
+                        if (fReduced.IsFalse(pss.Observed))
+                        {
+                            preconditionCache[f] = false;
+                            break;
+                        }
+                        Formula fNegatePreconditions = fReduced.Negate();
+                        if (pss.ConsistentWith(fNegatePreconditions, true))
+                        {
+                            preconditionCache[f] = false;
+                            break;
+                        }
+                        preconditionCache[f] = true;
+                        preconditionsHold +=1;
+                    }
+                    actionDictionary[a] = preconditionsHold/newPrecondition.Operands.Count;
+                }
+            }
+
+            //make sure you "fail fast", try doing the action nearest if relevant. this may require change in domain knowledge.
+            bool exhaustedAllOptions = alreadyAttemptedActions.Count() == Actions.Count;
+
+
+            List<int> alreadyAttemptedPreconds = new List<int>();
+            bool sameAction = false;
+            ParametrizedAction aPar = null;
+            //replace
+            if (removedPreconditions.Count > 0)
+            {
+                sameAction = true;
+                Tuple<ParametrizedAction, Formula, List<int>> actionPrecondPair = removedPreconditions.Last();
+                aPar = actionPrecondPair.Item1;
+                aPar.Preconditions = actionPrecondPair.Item2;
+                alreadyAttemptedPreconds = actionPrecondPair.Item3;
+
+                exhaustedAllOptions = exhaustedAllOptions && alreadyAttemptedPreconds.Count() == aPar.Preconditions.Size;
+                if (exhaustedAllOptions)
+                    return true;
+
+                if (alreadyAttemptedPreconds.Count == aPar.Preconditions.Size)
+                    sameAction = false;
+            }
+
+            if (!sameAction)
+            {
+                alreadyAttemptedPreconds.Clear();
+                int randomIndex = RandomGenerator.Next(Actions.Count());
+                while (alreadyAttemptedActions.Contains(randomIndex))
+                {
+                    randomIndex = (randomIndex + 1) % Actions.Count();
+                }
+                alreadyAttemptedActions.Add(randomIndex);
+                aPar = (ParametrizedAction)Actions[randomIndex];
+            }
+
+
+            //save before removing
+            Formula aOriginalPreconditions = aPar.Preconditions.Clone();
+
+            //remove
+            if (aPar.Preconditions is CompoundFormula)
+            {
+                CompoundFormula aPreconditions = (CompoundFormula)aPar.Preconditions;
+
+                int removeAtIndex = RandomGenerator.Next(((CompoundFormula)aPar.Preconditions).Operands.Count());
+
+
+                while (alreadyAttemptedPreconds.Contains(removeAtIndex))
+                {
+                    removeAtIndex = (removeAtIndex + 1) % aPar.Preconditions.Size;
+                }
+                alreadyAttemptedPreconds.Add(removeAtIndex);
+                aPreconditions.Operands.RemoveAt(removeAtIndex);
+            }
+            else
+            {
+                aPar.Preconditions = null;
+                alreadyAttemptedPreconds.Add(0);
+            }
+
+
+            removedPreconditions.Add(Tuple.Create(aPar, aOriginalPreconditions, alreadyAttemptedPreconds));
+            Debug.WriteLine(aPar);
+            return exhaustedAllOptions;
+
+
+        }
+
+        internal Domain RelaxAll()
+        {
+            Domain result = new Domain(this);
+            List<PlanningAction> relaxedActions = new List<PlanningAction>();
+            foreach (PlanningAction ra in result.Actions)
+            {
+                if (ra.Effects!=null)
+                    ra.Effects = ra.Effects.RemoveNegations();
+            }
+            return result;
+        }
+
+        internal void RestorePrecondition(PlanningAction aOrg)
+        {
+            //Console.WriteLine("restored precond");
+            PlanningAction action = GetActionByName(aOrg.Name);
+            action.Preconditions = originalPreconditions[action.Name];
+            //action.PreconditionsVerified = true;
+        }
+
+        internal void RemoveInjectedActionsAndPredicates(List<string> lPlan)
+        {
+            Predicates.Remove(NoOverSpecifications);
+            NoOverSpecifications = null;
+            if (lPlan is null)
+                lPlan = new List<string>();
+            var modifiedActions = lPlan.Where(entry => entry.Contains("fakePreReq") && entry.EndsWith("-0")).ToList();
+            if (modifiedActions.Count() > 0)
+            {
+                if (Options.Verbose) 
+                    Console.WriteLine("----"+modifiedActions.ElementAt(0)+ "----");
+                var fakeActions = lPlan.Where(entry => entry.Contains("fakePreReq")).ToList();
+                foreach (string s in fakeActions)
+                {
+                    lPlan.Remove(s);
+                }
+                foreach (string s in modifiedActions)
+                {
+                    PreviouslyModifiedActions.Add(s);
+                }
+            }
+            var actionsToRemove = Actions.Where(action => action.Name.Contains("fakePreReq")).ToList();
+            foreach (PlanningAction pa in actionsToRemove)
+            {
+                Actions.Remove(pa);
+            }
+
+            var predicatesToRemove = Predicates.Where(p => p.Name.Contains("fakePreReq")).ToList();
+            foreach (Predicate p in predicatesToRemove)
+            {
+                m_lAlwaysKnown.Remove(p.Name);
+                RemoveFakePredicate(p);
+                Predicates.Remove(p);
+            }
+            for (int i=0; i<originalPreconditions.Count; i++)
+            {
+                PlanningAction a = Actions[i];
+                originalPreconditions.TryGetValue(a.Name, out Formula f);
+                a.Preconditions = f;
+
+                foreach (string modifiedAction in modifiedActions)
+                {
+                    string actionName = modifiedAction.Substring(12, modifiedAction.IndexOf("-fakePreReq")-12);
+                    if (a.Name == actionName)
+                    {
+                        string predName = modifiedAction.Substring(modifiedAction.IndexOf("("), modifiedAction.IndexOf(")") - modifiedAction.IndexOf("(") + 1);
+                        PlanningAction aTag = a.Clone();
+
+                        aTag.RemovePrecondition(predName);
+                        Actions[i] = aTag;
+                        a = aTag;
+                    }
+                }
+            }
+        }
+        private Predicate NoOverSpecifications;
+        List<Predicate> FakePredicates = new List<Predicate>();
+
+        internal void AddNoOverSpecifications(Predicate noOverSpecifications)
+        {
+            if (NoOverSpecifications == null)
+            {
+                NoOverSpecifications = noOverSpecifications;
+                AddPredicate(noOverSpecifications);
+            }
+        }
+
+        /*
+         * Add fake predicates to the domain, to be used as overspecified action preconditions 
+         */
+        internal void AddFakePredicates()
+        {
+            for (int i=0; i<Options.NumFakePreds; i++)
+            {
+                Predicate fp = new ParametrizedPredicate("fakePredicate-" + i);
+                FakePredicates.Add(fp);
+            }
         }
     }
 }

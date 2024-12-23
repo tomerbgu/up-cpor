@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Xml.Linq;
 using static CPORLib.Tools.Options;
 using Action = CPORLib.PlanningModel.PlanningAction;
 
@@ -34,6 +35,7 @@ namespace CPORLib.PlanningModel
         public List<State> IdentifiedDeadendStates;
         public List<PartiallySpecifiedState> Parents { get; private set; }
         public Action GeneratingAction { get; private set; }
+        public Action problemAction { get; private set; }
         public Formula GeneratingObservation
         {
             get
@@ -53,7 +55,7 @@ namespace CPORLib.PlanningModel
 
             }
         }
-        public Problem Problem { get; private set; }
+        public Problem Problem { get; set; }
         public State UnderlyingEnvironmentState { get; set; }
         public BeliefState m_bsInitialBelief;
 
@@ -475,18 +477,16 @@ namespace CPORLib.PlanningModel
             }
             return true;
         }
-        private bool ConsistentWith(Formula fOriginal, bool bCheckingActionPreconditions)
+        public bool ConsistentWith(Formula fOriginal, bool bCheckingActionPreconditions)
         {
             PartiallySpecifiedState pssCurrent = this;
             Formula fCurrent = fOriginal;
-
-
-            Formula fReduced = null;
+            Formula fReduced;
             int cRegressions = 0;
             while (pssCurrent.m_sPredecessor != null)
             {
                 //fReduced = fCurrent.Reduce(pssCurrent.Observed);
-                ISet<Predicate> filtered = new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
+                ISet<Predicate> filtered = pssCurrent.Observed;//TODO new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
                 fReduced = fCurrent.Reduce(filtered);
                 if (fReduced.IsTrue(null))
                     return true;
@@ -509,16 +509,19 @@ namespace CPORLib.PlanningModel
                     Formula fRegressed = fToRegress.Regress(pssCurrent.GeneratingAction, filtered);
                     fCurrent = fRegressed;
                 }
-                    //Formula fRegressed = fToRegress.Regress(GeneratingAction);
+                else
+                {
+                    Console.WriteLine("no gen action");
+                }
                 cRegressions++;               
                 pssCurrent = pssCurrent.m_sPredecessor;
             }
-            ISet<Predicate> filtered2 = new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
-            ISet<Predicate> filtered3 = new HashSet<Predicate>(m_bsInitialBelief.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
-            fReduced = fCurrent.Reduce(filtered2);
-            if (fReduced.IsTrue(filtered3))
+            //ISet<Predicate> filtered2 = new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
+            //ISet<Predicate> filtered3 = new HashSet<Predicate>(m_bsInitialBelief.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
+            fReduced = fCurrent.Reduce(Observed);
+            if (fReduced.IsTrue(m_bsInitialBelief.Observed))//todo why were these replaced with null
                 return true;
-            if (fReduced.IsFalse(filtered3))
+            if (fReduced.IsFalse(m_bsInitialBelief.Observed))
                 return false;
             return m_bsInitialBelief.ConsistentWith(fReduced, bCheckingActionPreconditions, Verified);
             //m_bsInitialBelief.ApplyReasoning();
@@ -536,14 +539,45 @@ namespace CPORLib.PlanningModel
             return AddToObservedList(p);
         }
 
-        public bool RemoveObservedPreCond(Action a)
+        public Formula RemoveObservedPreCond(Action a)
         {
+
+            if (a.Preconditions == null)
+                return null;
             ISet<Predicate> pred = a.Preconditions.GetAllPredicates();
             Formula toRegress = a.Preconditions.Negate();
             ISet<Predicate> verified = new GenericArraySet<Predicate>();
             var filteredPred = pred.Where(p => Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name));
-            CompoundFormula cf;//, cfAll = new CompoundFormula("or");
             GroundedPredicate pCanonical;
+            bool allVerified = true;
+            Formula originalPrecond = Problem.Domain.originalPreconditions[Utilities.SplitString(a.Name, Utilities.DELIMITER_CHAR[0])[0]];
+            Action aLifted = Problem.Domain.GetActionByName(Utilities.SplitString(a.Name, Utilities.DELIMITER_CHAR[0])[0]);
+            if (!aLifted.Preconditions.Equals(originalPrecond))
+            {
+                //if only the removed pred is not true, restore precond
+                List<Predicate> removedPred = originalPrecond.GetAllPredicates().Where(p => !a.Preconditions.GetAllPredicates().Select(obj => obj.Name).Contains(p.Name)).ToList();
+                if (removedPred.Count > 0)
+                {
+                    aLifted.Preconditions = originalPrecond;
+                    ParametrizedAction pa = (ParametrizedAction)aLifted;
+                    var bindings = Problem.Domain.GetBindings(pa, Utilities.SplitString(a.Name, Utilities.DELIMITER_CHAR[0]));
+
+                    foreach (Predicate p in removedPred)
+                    {
+                        PredicateFormula pf = new PredicateFormula(p);
+                        PredicateFormula f = (PredicateFormula)pf.Ground(bindings);
+                        if (Problem.Known.Contains(f.Predicate.Negate()) || (!Problem.Known.Contains(f.Predicate) && Problem.Domain.AlwaysKnown(f.Predicate)))
+                            return null;
+                        if (Problem.Unknown.Contains(f.Predicate)) {
+                            m_bsInitialBelief.AddObserved(f.Predicate.Negate());
+                            AddObserved(f.Predicate.Negate());
+                            Problem.Known.Add(f.Predicate.Negate());
+                            Hidden.Remove(f.Predicate);
+                            return f.Negate();
+                        }
+                    }
+                }
+            }
             foreach (Predicate p in filteredPred)
             {
                 if (Verified.Contains(p))
@@ -551,8 +585,10 @@ namespace CPORLib.PlanningModel
                     verified.Add(p);
                     continue;
                 }
+                allVerified = false;
                 m_bsInitialBelief.Observed.Remove(p);
                 Observed.Remove(p);
+                Problem.Known.Remove(p);
                 Hidden.Add(p);
 
                 m_bsInitialBelief.Unknown.Add(p.Canonical());
@@ -561,8 +597,36 @@ namespace CPORLib.PlanningModel
                 if (!m_bsInitialBelief.Unknown.Contains(pCanonical))
                     m_bsInitialBelief.Unknown.Add(pCanonical);
             }
+            if (allVerified)
+            {
+                problemAction = a;
+                return null; //this means we are in the overspecified precondition case
+            }
+
             toRegress = toRegress.ApplyKnown(verified);
             toRegress = toRegress.Simplify();
+            if (toRegress is CompoundFormula)
+                toRegress = ((CompoundFormula)toRegress).RemovePredicates(new HashSet<Predicate>(pred.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)).ToList()));
+            if (toRegress is CompoundFormula)
+            {
+                foreach (Formula f in ((CompoundFormula)toRegress).Operands)
+                {
+                    Predicate p = ((PredicateFormula)f).Predicate;
+                    Predicate pNegate = p.Negate();
+                    if (m_bsInitialBelief.Observed.Contains(pNegate))
+                        m_bsInitialBelief.Observed.Remove(pNegate);
+                }
+                Problem.AddHidden((CompoundFormula)toRegress);
+            }
+            else
+            {
+                CompoundFormula cf = new CompoundFormula("or");
+                cf.AddOperand(toRegress);
+                cf.SimpleAddOperand(toRegress.Negate());
+                Problem.AddHidden(cf);
+                m_bsInitialBelief.Hidden.Add(cf);
+            }
+                
             if (toRegress is PredicateFormula)
             {
                 PartiallySpecifiedState pssCurrent = this;
@@ -572,9 +636,18 @@ namespace CPORLib.PlanningModel
                     pssCurrent = pssCurrent.Predecessor;
                 }
             }
-            m_bsInitialBelief.ReviseInitialBelief(toRegress, this);
-            
-            return true;
+
+            CompoundFormula cff = new CompoundFormula("or");
+            cff.AddOperand(toRegress);
+
+            //TODO TOMER WHY WAS THIS NECESSARY - RUN REGRESSION TESTS
+            cff.SimpleAddOperand(toRegress.Negate().Simplify());
+
+            m_bsInitialBelief.ReviseInitialBelief(cff, this);
+
+            a.PreconditionsVerified = true;
+            return cff;
+
         }
 
         private bool AddToObservedList(Predicate p)
@@ -742,7 +815,7 @@ namespace CPORLib.PlanningModel
         public bool IsApplicable(string sActionName)
         {
             Action a = GetAction(sActionName);
-            if (a == null)
+            if (a == null || a.Equals(problemAction))
                 return false;
             return IsApplicable(a);
         }
@@ -759,6 +832,11 @@ namespace CPORLib.PlanningModel
             if (fReduced.IsFalse(m_lObserved))
                 return false;
             Formula fNegatePreconditions = fReduced.Negate();
+            //todo is this legal? - messes up doors?, helps unix
+            if (ConsistentWith(fReduced, true))
+            {
+                return true;
+            }
             if (ConsistentWith(fNegatePreconditions, true))
             {
                 return false;
@@ -1439,7 +1517,7 @@ namespace CPORLib.PlanningModel
             }
 
         }
-        private PartiallySpecifiedState Apply(Action aOrg, out Formula fObserve, bool bPropogateOnly)
+        public PartiallySpecifiedState Apply(Action aOrg, out Formula fObserve, bool bPropogateOnly)
         {
             //Debug.WriteLine("Executing " + a.Name);
             fObserve = null;
@@ -1548,7 +1626,7 @@ namespace CPORLib.PlanningModel
             bool actionFailed = (aOrg.Observe == null && sObservation != null);
             if (aOrg.Observe != null && sObservation == null)
                 return null;
-            else if (aOrg.Observe == null && sObservation != null)
+            else if (sObservation == "Fail")
             {
                 //TODO make less wastefull
                 State sNew2 = null;
@@ -1562,9 +1640,19 @@ namespace CPORLib.PlanningModel
                     bsNew2.UnderlyingEnvironmentState = sNew2;
                 }
 
-                bsNew2.RemoveObservedPreCond(aOrg);
+                Action aMod = aOrg.Clone();
+                aMod.Effects = null;
+                aMod.Preconditions = null;
+                aMod.Observe = null;
+                bsNew2.GeneratingAction = aMod; //TODO maybe this needs to be aOrg
 
-                bsNew2.GeneratingAction = GeneratingAction; //TODO maybe this needs to be aOrg
+
+                Formula knewKnowledge = bsNew2.RemoveObservedPreCond(aOrg);
+                if (knewKnowledge == null || knewKnowledge.IsTrue(null)) //if a precondition was wrongfully removed
+                    Problem.Domain.RestorePrecondition(aOrg);
+                else //TODO restore this
+                    aMod.Observe = knewKnowledge;
+
                 return bsNew2;
             }
             else
@@ -1822,7 +1910,7 @@ namespace CPORLib.PlanningModel
             if (fToRegress is CompoundFormula)
             {
                 bool bChanged = false;
-                //fToRegress = ((CompoundFormula)fToRegress).RemoveNestedConjunction(out bChanged).Simplify();
+                fToRegress = ((CompoundFormula)fToRegress).RemoveNestedConjunction(out bChanged).Simplify();
             }
             if (fToRegress.IsTrue(null) || GeneratingAction==null)
                 return fToRegress;
@@ -2240,7 +2328,7 @@ namespace CPORLib.PlanningModel
         }
 
         public void GetTaggedDomainAndProblem(Options.DeadendStrategies dsStrategy, bool bPreconditionFailure, out int cTags,
-            out Domain dTagged, out Problem pTagged, bool fakeDeadends, string newGoal)
+            out Domain dTagged, out Problem pTagged, bool fakeDeadends, List<string> newGoal)
         {
             List<Action> lActions = new List<PlanningAction>();
             PartiallySpecifiedState pssCurrent = this;

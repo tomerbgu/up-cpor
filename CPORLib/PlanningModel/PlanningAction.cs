@@ -16,6 +16,7 @@ namespace CPORLib.PlanningModel
 
         public string Name { get; set; }
         public Formula Preconditions { get; set; }
+        public bool PreconditionsVerified { get; set; }
         public Formula Effects { get; set; }
         public Formula Observe { get; set; }
         public bool ContainsNonDeterministicEffect { get; protected set; }
@@ -46,6 +47,7 @@ namespace CPORLib.PlanningModel
             m_mMapConditionsChoices = new Dictionary<int, List<int>>();
             ID = IDs++;
             NonDeterministicEffects = new HashSet<Predicate>();
+            PreconditionsVerified = false;
         }
 
         public override string ToString()
@@ -502,6 +504,37 @@ namespace CPORLib.PlanningModel
             return aNew;
         }
 
+        private void addPreconditionsToFormula(CompoundFormula cfPreconditionsTarget, Formula pc, HashSet<Predicate> lKnowPreconditions, List<string> lAlwaysKnown)
+        {
+            pc.GetAllPredicates(lKnowPreconditions);
+            cfPreconditionsTarget.AddOperand(pc);
+            foreach (Predicate p in lKnowPreconditions)
+                if (!lAlwaysKnown.Contains(p.Name))
+                    cfPreconditionsTarget.AddOperand(new PredicateFormula(Predicate.GenerateKnowPredicate(p)));
+        }
+
+        private void constructCFPrecond(CompoundFormula cfPreconditionsTarget, CompoundFormula cf, HashSet<Predicate> lKnowPreconditions, List<string> lAlwaysKnown)
+        {
+            foreach (Formula f in cf.Operands)
+            {
+                if (f is CompoundFormula fcfOR && fcfOR.Operator == "or")
+                {
+                    CompoundFormula orCF = new CompoundFormula("or");
+                    foreach (Formula orCFf in fcfOR.Operands)
+                    {
+                        CompoundFormula a1 = new CompoundFormula("and");
+                        addPreconditionsToFormula(a1, orCFf, new HashSet<Predicate>(), lAlwaysKnown);
+                        orCF.AddOperand(a1);
+                    }
+                    cfPreconditionsTarget.AddOperand(orCF);
+                }
+                else if (f is CompoundFormula fcf && fcf.ContainsOrCondition())
+                    constructCFPrecond(cfPreconditionsTarget, fcf, lKnowPreconditions, lAlwaysKnown);
+                else
+                    addPreconditionsToFormula(cfPreconditionsTarget, f, lKnowPreconditions, lAlwaysKnown);
+            }
+        }
+
         public PlanningAction NonConditionalObservationTranslation(Dictionary<string, ISet<Predicate>> dTags, List<string> lAlwaysKnown, bool bTrue)
         {
             PlanningAction aNew = Clone();
@@ -519,11 +552,28 @@ namespace CPORLib.PlanningModel
             Predicate pObserve = ((PredicateFormula)Observe).Predicate;
             if (Preconditions != null)
             {
-                Preconditions.GetAllPredicates(lKnowPreconditions);
-                cfPreconditions.AddOperand(Preconditions);
-                foreach (Predicate p in lKnowPreconditions)
-                    if (!lAlwaysKnown.Contains(p.Name))
-                        cfPreconditions.AddOperand(new PredicateFormula(Predicate.GenerateKnowPredicate(p)));
+                if (Preconditions is CompoundFormula fcfOR && fcfOR.Operator == "or")
+                {
+                    CompoundFormula orCF = new CompoundFormula("or");
+                    foreach (Formula orCFf in fcfOR.Operands)
+                    {
+                        CompoundFormula a1 = new CompoundFormula("and");
+                        addPreconditionsToFormula(a1, orCFf, new HashSet<Predicate>(), lAlwaysKnown);
+                        orCF.AddOperand(a1);
+                    }
+                    cfPreconditions.AddOperand(orCF);
+                }
+                else if (Preconditions is CompoundFormula oPreconditions && oPreconditions.ContainsOrCondition())
+                {
+                    constructCFPrecond(cfPreconditions, oPreconditions, lKnowPreconditions, lAlwaysKnown);
+                }
+                else
+                    addPreconditionsToFormula(cfPreconditions, Preconditions, lKnowPreconditions, lAlwaysKnown);
+                //Preconditions.GetAllPredicates(lKnowPreconditions);
+                //cfPreconditions.AddOperand(Preconditions);
+                //foreach (Predicate p in lKnowPreconditions)
+                //    if (!lAlwaysKnown.Contains(p.Name))
+                //        cfPreconditions.AddOperand(new PredicateFormula(Predicate.GenerateKnowPredicate(p)));
             }
             if (bTrue)
                 cfPreconditions.AddOperand(pObserve);
@@ -835,14 +885,66 @@ namespace CPORLib.PlanningModel
             HashSet<Predicate> lKnowPreconditions = new HashSet<Predicate>();
             if (Preconditions != null)
             {
-                Preconditions.GetAllPredicates(lKnowPreconditions);
-                cfPreconditions.AddOperand(Preconditions);
-                foreach (Predicate p in lKnowPreconditions)
-                    if (!lAlwaysKnown.Contains(p.Name))
-                        cfPreconditions.AddOperand(new PredicateFormula(Predicate.GenerateKnowPredicate(p)));
-                if (Options.SplitConditionalEffects)
-                    cfPreconditions.AddOperand(new GroundedPredicate("NotInAction"));
-
+                bool flag = true;
+                if (true)
+                {
+                    if (Preconditions is CompoundFormula)
+                    {
+                        CompoundFormula pc = (CompoundFormula)Preconditions;
+                        foreach (Formula f in pc.Operands)
+                        {
+                            if (f is CompoundFormula)
+                            {
+                                CompoundFormula cf = (CompoundFormula)f;
+                                if (cf.Operator == "or")
+                                {
+                                    flag = false;
+                                    CompoundFormula orPreconditions = new CompoundFormula("or");
+                                    lKnowPreconditions.Clear();
+                                    f.GetAllPredicates(lKnowPreconditions);
+                                    //and_i.AddOperand(Preconditions);
+                                    foreach (Predicate p in lKnowPreconditions)
+                                    {
+                                        CompoundFormula cfAnd = new CompoundFormula("and");
+                                        cfAnd.AddOperand(p);
+                                        if (!lAlwaysKnown.Contains(p.Name))
+                                        {
+                                            cfAnd.AddOperand(new PredicateFormula(Predicate.GenerateKnowPredicate(p)));
+                                        }
+                                        orPreconditions.AddOperand(cfAnd);
+                                    }
+                                    if (Options.SplitConditionalEffects)
+                                        cf.AddOperand(new GroundedPredicate("NotInAction"));
+                                    cfPreconditions.AddOperand(orPreconditions);
+                                }
+                                else
+                                    break;
+                                //cfPreconditions.AddOperand(cf);
+                            }
+                            else
+                            {
+                                lKnowPreconditions.Clear();
+                                f.GetAllPredicates(lKnowPreconditions);
+                                cfPreconditions.AddOperand(f);
+                                foreach (Predicate p in lKnowPreconditions)
+                                    if (!lAlwaysKnown.Contains(p.Name))
+                                        cfPreconditions.AddOperand(new PredicateFormula(Predicate.GenerateKnowPredicate(p)));
+                                if (Options.SplitConditionalEffects)
+                                    cfPreconditions.AddOperand(new GroundedPredicate("NotInAction"));
+                            }
+                        }
+                    }
+                }
+                if (flag)
+                {
+                    Preconditions.GetAllPredicates(lKnowPreconditions);
+                    cfPreconditions.AddOperand(Preconditions);
+                    foreach (Predicate p in lKnowPreconditions)
+                        if (!lAlwaysKnown.Contains(p.Name))
+                            cfPreconditions.AddOperand(new PredicateFormula(Predicate.GenerateKnowPredicate(p)));
+                    if (Options.SplitConditionalEffects)
+                        cfPreconditions.AddOperand(new GroundedPredicate("NotInAction"));
+                }
                 aNew.Preconditions = cfPreconditions;
             }
             if (Effects != null || lConditions.Count() > 0)
@@ -1167,7 +1269,7 @@ namespace CPORLib.PlanningModel
                 foreach (Formula f in lObligatory)
                 {
                     f.GetAllPredicates(lKnowEffects);
-                    //cfEffects.AddOperand(f);//BGUBGU - probably a bug here. Need to separate always known and the rest.
+                    //cfEffects.AddOperand(f);//BUGBUG - probably a bug here. Need to separate always known and the rest.
                 }
                 foreach (Predicate p in lKnowEffects)
                 {
@@ -1281,7 +1383,7 @@ namespace CPORLib.PlanningModel
                 foreach (Formula f in lObligatory)
                 {
                     f.GetAllPredicates(lKnowEffects);
-                    //cfEffects.AddOperand(f);//BGUBGU - probably a bug here. Need to separate always known and the rest.
+                    //cfEffects.AddOperand(f);//BUGBUG - probably a bug here. Need to separate always known and the rest.
                 }
                 if (lKnowEffects.Count > 0)
                 {
@@ -2684,6 +2786,7 @@ namespace CPORLib.PlanningModel
             aNew.ContainsNonDeterministicEffect = ContainsNonDeterministicEffect;
             aNew.NonDeterministicEffects = new HashSet<Predicate>(NonDeterministicEffects);
             aNew.Original = Original;
+            aNew.PreconditionsVerified = PreconditionsVerified;
             return aNew;
         }
 
@@ -3798,6 +3901,40 @@ namespace CPORLib.PlanningModel
             return lActions;
         }
 
+        internal PlanningAction getRelaxed()
+        {
 
+            if (Observe != null && Effects == null)
+            {
+                Effects = Observe;
+            }
+            PlanningAction a = Clone();
+            if (Effects is CompoundFormula)
+            {
+                CompoundFormula ncf = new CompoundFormula("and");
+                foreach (Formula e in  ((CompoundFormula)Effects).Operands)
+                {
+                    if (!((PredicateFormula)e).Predicate.Negation)
+                        ncf.Operands.Add(e);
+                }
+                a.Effects = ncf;
+            }
+            return a;
+        }
+
+        internal void RemovePrecondition(string predName)
+        {
+            if (!(Preconditions.ToString().Contains(predName)))
+                throw new Exception("Precondition doesn not exist in this action");
+            if (Preconditions is CompoundFormula)
+            {
+                ((CompoundFormula)Preconditions).Operands.RemoveAll(f => f.ToString() == predName);
+            }
+            else
+            {
+                Preconditions = null;
+            }
+
+        }
     }
 }

@@ -85,6 +85,8 @@ namespace CPORLib.Algorithms
                 }
                 Console.Write("Choose action number: ");
                 int iAction = int.Parse(Console.ReadLine());
+                if (iAction < 0)
+                    return null;
                 a = lActions[iAction];
                 
                 NextState = CurrentState.Apply(a, out Formula fObserve);

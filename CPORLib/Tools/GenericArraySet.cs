@@ -12,7 +12,7 @@ namespace CPORLib.Tools
     {
         public static Dictionary<T, int> Indexes = new Dictionary<T, int>();
         public static int CountIndexes = 0;
-        public static int Max = 10000;
+        public static int Max = 100000;
         public static void Reset()
         {
             Indexes = new Dictionary<T, int>();

@@ -20,6 +20,7 @@ namespace CPORLib.Algorithms
         public ForwardSearchPlanner(Domain d, Problem p)
             : base(d, p)
         {
+            m_lGroundedActions = d.GroundAllActions(p, true);
             m_fHeuristic = new HSPHeuristic(m_lGroundedActions, m_pProblem.Goal, true);
         }
 

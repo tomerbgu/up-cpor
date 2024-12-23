@@ -260,6 +260,7 @@ namespace CPORLib.PlanningModel
                 {
                     m_lProblematicTag = new HashSet<Predicate>();
                     foreach (Predicate p in lAssignment)
+                        //if (!Problem.Domain.m_lAlwaysKnown.Contains(p.Name))
                         m_lProblematicTag.Add(p);
                 }
 
@@ -1331,10 +1332,7 @@ namespace CPORLib.PlanningModel
                 
                 foreach (Predicate p in m_lNeededTag)
                 {
-                    lToAssign.Remove(p);;
-                }
-                foreach (Predicate p in m_lNeededTag)
-                {
+                    lToAssign.Remove(p);
                     tempNeededTags.Add(p.Negate());
                 }
                 m_lNeededTag = tempNeededTags;
@@ -1813,7 +1811,7 @@ namespace CPORLib.PlanningModel
 
         public void GetTaggedDomainAndProblem(PartiallySpecifiedState pssCurrent, List<Action> lAppliedActions, 
             Options.DeadendStrategies dsStrategy, bool bPreconditionFailure,
-            out int cTags, out Domain dTagged, out Problem pTagged, bool fakeDeadends, string newGoal
+            out int cTags, out Domain dTagged, out Problem pTagged, bool fakeDeadends, List<string> oldPlan
             )
         {
             List<PlanningAction> lFakeActions = null;
@@ -1822,7 +1820,7 @@ namespace CPORLib.PlanningModel
             BeliefState original = null;
             Problem oProb = null;
             HashSet<Predicate> origObserved = new HashSet<Predicate>();
-            bool modifyGoal = newGoal != null;
+            bool modifyGoal = oldPlan != null;
             if (fakeDeadends || modifyGoal)
             {
                 modifyDomainBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.MakeTrue && !modifyGoal;
@@ -1847,35 +1845,14 @@ namespace CPORLib.PlanningModel
             Formula modifiedGoal = null;
             Predicate pKNObserve = null;
             Predicate pKObserve = null;
-            bool guysWay = true;
             if (modifyGoal)
             {
                 oldGoal = Problem.Goal;
-                //change Goal to verified-opened
-                
-                if (!guysWay)
+                ModifyProblemBeforeStateSelection(pssCurrent);
+                modifiedGoal = new CompoundFormula("or");
+                CompoundFormula modifiedGoalCF = (CompoundFormula)modifiedGoal;
+                foreach (string newGoal in oldPlan.Where(s => s.StartsWith("Make:")))
                 {
-                    ModifyDomainBeforeStateSelection(false);
-                    modifiedGoal = new CompoundFormula("and");
-                    newGoal = newGoal.Replace("Make:", "verified-");
-                    String[] vars = newGoal.Split(' ');
-                    ParametrizedPredicate pp = (ParametrizedPredicate)Problem.Domain.Predicates.FirstOrDefault(obj => obj.Name == vars[0]);
-                    Dictionary<Parameter, Constant> dBindings = new Dictionary<Parameter, Constant>();
-
-                    int i = 1;
-                    foreach (Parameter p in pp.Parameters)
-                    {
-                        dBindings[p] = new Constant(p.Type, vars[i]);
-                        i++;
-                    }
-                    GroundedPredicate newPredicateGoal = pp.Ground(dBindings);
-                    modifiedGoal = new PredicateFormula(newPredicateGoal);
-                }
-                else
-                {
-                    ModifyProblemBeforeStateSelection(pssCurrent);
-                    modifiedGoal = new CompoundFormula("or");
-                    //CompoundFormula modifiedGoalCF = (CompoundFormula)modifiedGoal;
                     string pred = newGoal.Replace("Make:", "");
                     String[] vars = pred.Split(' ');
                     ParametrizedPredicate pp = (ParametrizedPredicate)Problem.Domain.Predicates.FirstOrDefault(obj => obj.Name == vars[0]).Clone();
@@ -1886,35 +1863,27 @@ namespace CPORLib.PlanningModel
                         newGrounded.AddConstant(new Constant(p.Type, vars[i]));
                         i++;
                     }
-                    
+
                     pKObserve = Predicate.GenerateKnowPredicate(newGrounded);
-                    //pKNObserve = Predicate.GenerateKnowPredicate(newGrounded.Negate());
-
-                    //modifiedGoalCF.AddOperand(pKObserve);
-                    //modifiedGoalCF.AddOperand(pKNObserve);
-                    //modifiedGoal = new PredicateFormula(pKObserve);
-
-                    //Problem.Known.Remove(pKObserve);
-                    //Problem.Known.Remove(pKNObserve);
-                    Predicate currGoal = pKObserve;
-                    //if (bPreconditionFailure)
-                    //    currGoal = pKNObserve;
-                    modifiedGoal = new PredicateFormula(currGoal);
-
+                    modifiedGoalCF.AddOperand(pKObserve);
                     addNeededTag(newGrounded);
                 }
             }
             cTags = 0;
-            List<ISet<Predicate>> lChosen = ChooseStateSet();
-            ChosenStates = lChosen;
+            bool change = !fakeDeadends;
+            if (change)
+            {
+                List<ISet<Predicate>> lChosen = ChooseStateSet();
+                ChosenStates = lChosen;
+            }
 
             dTagged = null;
             pTagged = null;
-            if (lChosen == null)
+            if (ChosenStates == null)
                 return;
 
             //BUGBUG;//We should cache the states, try to avoid this useless repetition
-            List<State> lStates = ApplyActions(lChosen, lAppliedActions);
+            List<State> lStates = ApplyActions(ChosenStates, lAppliedActions);
 
             if(lStates.Count == 0)
             {
@@ -1961,11 +1930,31 @@ namespace CPORLib.PlanningModel
                     {
                         Problem.Domain.Actions.Remove(fa);
                     }
+                    foreach (PlanningAction a in Problem.Domain.Actions)
+                    {
+                        foreach (Predicate p in Problem.Domain.Uncertainties)
+                        {
+                            if (a.Effects != null)
+                            {
+                                foreach (Predicate pEffect in a.Effects.GetAllPredicates())
+                                {
+                                    Predicate verified = p.CreateVerifiedPredicate();
+                                    if (verified.Name == pEffect.Name)
+                                    {
+                                        if (a.Effects is CompoundFormula)
+                                            a.Effects = ((CompoundFormula)a.Effects).RemovePredicates(new HashSet<Predicate> { pEffect });
+                                        else
+                                            a.Effects = null;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if (modifyGoal)
             {
-                if (guysWay) m_lNeededTag.Clear();
+                m_lNeededTag.Clear();
                 pTagged.Goal = modifiedGoal;
                 Problem = oProb;
                 m_lHiddenFormulas = original.m_lHiddenFormulas;
@@ -2053,11 +2042,23 @@ namespace CPORLib.PlanningModel
             {
                 var uncertainObserved = Observed.Where(p => p.Name == s.Name);
                 IEnumerable<Predicate> uncertainVerified = new HashSet<Predicate>();
-                if(pssCurrent != null)
+                List<Predicate> addToObserved = new List<Predicate>();
+                if (pssCurrent != null)
                     uncertainVerified = pssCurrent.Verified.Where(p => p.Name == s.Name);
                 foreach (Predicate p in uncertainObserved)
                 {
-                    if ((p.Negation||pssCurrent==null) && !uncertainVerified.Contains(p))
+                    if (p.Negation && pssCurrent == null && InaccuracyHandlingStrategy==InaccuracyHandlingStrategies.BLOptimistic)
+                    {
+                        bool neg1 = Observed.Remove(p);
+                        bool neg2 = Problem.Known.Remove(p);
+                        //bool neg3 = pssCurrent.Observed.Remove(p);
+                        if (neg1 || neg2)
+                        {
+                            addToObserved.Add(p.Canonical());
+                            Problem.AddKnown(p.Canonical());
+                        }
+                    }
+                    else if ((pssCurrent==null && InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BL0) || (p.Negation && !uncertainVerified.Contains(p))) //pssCurrent is null only if we are at start
                     {
                         bool neg1 = Observed.Remove(p);
                         bool neg2 = Problem.Known.Remove(p);
@@ -2072,6 +2073,10 @@ namespace CPORLib.PlanningModel
                             m_lHiddenFormulas.Add(orHidden);
                         }
                     }
+                }
+                foreach (Predicate p in addToObserved)
+                {
+                    AddObserved(p);
                 }
                 foreach (Predicate p in uncertainVerified)
                 {
@@ -2410,7 +2415,7 @@ namespace CPORLib.PlanningModel
             return dTags;
         }
 
-        private List<ISet<Predicate>> ChooseStateSet()
+        public List<ISet<Predicate>> ChooseStateSet()
         {
             if (Options.Translation == Options.Translations.BestCase || (Unknown.Count == 0 && !Problem.Domain.ContainsNonDeterministicActions))
             {

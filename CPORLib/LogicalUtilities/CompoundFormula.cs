@@ -527,6 +527,18 @@ namespace CPORLib.LogicalUtilities
             return false;
         }
 
+        public bool ContainsOrCondition()
+        {
+            if (Operator == "or")
+                return true;
+            foreach (Formula fSub in Operands)
+            {
+                if (fSub is CompoundFormula fSubCompoundFormula && fSubCompoundFormula.ContainsOrCondition())
+                    return true;
+            }
+            return false;
+        }
+
         public override Formula Clone()
         {
             CompoundFormula cfClone = new CompoundFormula(Operator);
@@ -2118,7 +2130,7 @@ namespace CPORLib.LogicalUtilities
             foreach (Formula f in Operands)
             {
                 Formula fRemoved = f.RemoveNegations();
-                if (f != null)
+                if (fRemoved != null)
                 {
                     cf.AddOperand(fRemoved);
                 }
