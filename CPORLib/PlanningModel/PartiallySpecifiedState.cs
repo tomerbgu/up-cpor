@@ -550,12 +550,16 @@ namespace CPORLib.PlanningModel
             var filteredPred = pred.Where(p => Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name));
             GroundedPredicate pCanonical;
             bool allVerified = true;
-            Formula originalPrecond = Problem.Domain.originalPreconditions[Utilities.SplitString(a.Name, Utilities.DELIMITER_CHAR[0])[0]];
-            Action aLifted = Problem.Domain.GetActionByName(Utilities.SplitString(a.Name, Utilities.DELIMITER_CHAR[0])[0]);
+            string[] actionName = Utilities.SplitString(a.Name, Utilities.DELIMITER_CHAR[0]);
+            Formula originalPrecond = Problem.Domain.originalPreconditions[actionName[0]];
+            Action aLifted = Problem.Domain.GetActionByName(actionName[0]);
+            Action aReal = Problem.Domain.GroundActionByNamePrecond(actionName, originalPrecond);
             if (!aLifted.Preconditions.Equals(originalPrecond))
             {
                 //if only the removed pred is not true, restore precond
-                List<Predicate> removedPred = originalPrecond.GetAllPredicates().Where(p => !a.Preconditions.GetAllPredicates().Select(obj => obj.Name).Contains(p.Name)).ToList();
+                //todo make sure this matches mixes of uncertainties in init domain (FN/FP)
+                Formula op = aReal.Preconditions;
+                List<Predicate> removedPred = op.GetAllPredicates().Where(p => !a.Preconditions.GetAllPredicates().Select(obj => obj.ToString()).Contains(p.ToString())).ToList();
                 if (removedPred.Count > 0)
                 {
                     aLifted.Preconditions = originalPrecond;
@@ -565,18 +569,21 @@ namespace CPORLib.PlanningModel
                     foreach (Predicate p in removedPred)
                     {
                         PredicateFormula pf = new PredicateFormula(p);
-                        PredicateFormula f = (PredicateFormula)pf.Ground(bindings);
-                        if (Problem.Known.Contains(f.Predicate.Negate()) || (!Problem.Known.Contains(f.Predicate) && Problem.Domain.AlwaysKnown(f.Predicate)))
+                        //PredicateFormula f = (PredicateFormula)pf.Ground(bindings);
+                        if (Problem.Known.Contains(pf.Predicate.Negate()) || (!Problem.Known.Contains(pf.Predicate) && Problem.Domain.AlwaysKnown(pf.Predicate)))
                             return null;
-                        if (Problem.Unknown.Contains(f.Predicate)) {
-                            m_bsInitialBelief.AddObserved(f.Predicate.Negate());
-                            AddObserved(f.Predicate.Negate());
-                            Problem.Known.Add(f.Predicate.Negate());
-                            Hidden.Remove(f.Predicate);
-                            return f.Negate();
+                        if (Problem.Unknown.Contains(pf.Predicate)) {
+                            //m_bsInitialBelief.AddObserved(pf.Predicate.Negate()); //todo is this valid?this will happen later
+                            AddObserved(pf.Predicate.Negate());
+                            Problem.Known.Add(pf.Predicate.Negate());
+                            Hidden.Remove(pf.Predicate);
+                            return pf.Negate();
                         }
                     }
+                    return null;
+
                 }
+                throw new Exception("BUG - we aren't supposed to reach here!");
             }
             foreach (Predicate p in filteredPred)
             {
@@ -655,12 +662,12 @@ namespace CPORLib.PlanningModel
 
 
 #if DEBUG
-            if (p.Name != "Choice" && !p.Negation)
-            {
-                Debug.Assert(UnderlyingEnvironmentState == null || (UnderlyingEnvironmentState.Contains(p)), "Adding a predicate that does not exist");
-                if (UnderlyingEnvironmentState != null && !UnderlyingEnvironmentState.Contains(p))
-                    Debug.WriteLine("Adding a predicate that does not exist");
-            }
+            //if (p.Name != "Choice" && !p.Negation)
+            //{
+            //    Debug.Assert(UnderlyingEnvironmentState == null || (UnderlyingEnvironmentState.Contains(p)), "Adding a predicate that does not exist");
+            //    if (UnderlyingEnvironmentState != null && !UnderlyingEnvironmentState.Contains(p))
+            //        Debug.WriteLine("Adding a predicate that does not exist");
+            //}
 #endif
             if (m_lObserved.Contains(p))
                 return false;
@@ -815,26 +822,56 @@ namespace CPORLib.PlanningModel
         public bool IsApplicable(string sActionName)
         {
             Action a = GetAction(sActionName);
-            if (a == null || a.Equals(problemAction))
+            if (a == null)
+                return false;
+            if (a.Equals(problemAction)) //todo this doesn't look right
                 return false;
             return IsApplicable(a);
         }
 
-        private bool IsApplicable(Action a)
+        private bool IsApplicable(Action a, bool optimistic=false)
         {
             if (a.Preconditions == null)
                 return true;
             m_bsInitialBelief.MaintainProblematicTag = true;
             Formula fReduced = a.Preconditions.Reduce(m_lObserved);
-
+            if (UnderlyingEnvironmentState != null)//todo double check this
+            {
+                if (fReduced is PredicateFormula fReducedPf && fReducedPf.Predicate.Negation)
+                {
+                    if (fReduced.IsTrue(UnderlyingEnvironmentState.Predicates))
+                        return false;
+                }
+                else if (fReduced is CompoundFormula cf)
+                {
+                    if (cf.Operator == "and")
+                    {
+                        foreach (Formula f in cf.Operands)
+                        {
+                            if (f is PredicateFormula fPf && fPf.Predicate.Negation)
+                            {
+                                if (fReduced.IsTrue(UnderlyingEnvironmentState.Predicates))
+                                    return false;
+                            }
+                            else if (!f.IsTrue(UnderlyingEnvironmentState.Predicates))
+                                return false;
+                        }
+                    }
+                    else if (!fReduced.IsTrue(UnderlyingEnvironmentState.Predicates))
+                        return false;
+                }
+                else if (!fReduced.IsTrue(UnderlyingEnvironmentState.Predicates))
+                    return false;
+            }
             if (fReduced.IsTrue(m_lObserved))
                 return true;
             if (fReduced.IsFalse(m_lObserved))
                 return false;
             Formula fNegatePreconditions = fReduced.Negate();
-            //todo is this legal? - messes up doors?, helps unix
-            if (ConsistentWith(fReduced, true))
+            //todo is this legal? - messes up doors?, helps unix - maybe not bc it can lead to failing actions???
+            if (optimistic && ConsistentWith(fReduced, true))
             {
+                //AddObserved(a.Preconditions);
                 return true;
             }
             if (ConsistentWith(fNegatePreconditions, true))
@@ -1181,7 +1218,7 @@ namespace CPORLib.PlanningModel
             PartiallySpecifiedState pssNext = Apply(a, out fObserve);
             return pssNext;
         }
-
+        //different if it's from the simulator
         public PartiallySpecifiedState Apply(Action a, out Formula fObserve)
         {
             return Apply(a, out fObserve, false);
@@ -1517,7 +1554,7 @@ namespace CPORLib.PlanningModel
             }
 
         }
-        public PartiallySpecifiedState Apply(Action aOrg, out Formula fObserve, bool bPropogateOnly)
+        public PartiallySpecifiedState Apply(Action aOrg, out Formula fObserve, bool bPropogateOnly, bool optimistic=false)
         {
             //Debug.WriteLine("Executing " + a.Name);
             fObserve = null;
@@ -1529,7 +1566,7 @@ namespace CPORLib.PlanningModel
             Action a = aOrg.ApplyObserved(m_lObserved);
 
             //no need to check pre during propogation - they were already confirmed the first time
-            if (!bPropogateOnly && a.Preconditions != null && !IsApplicable(a))
+            if (!bPropogateOnly && !IsApplicable(a, optimistic))
                 return null;
 
             a.ComputeRegressions();
@@ -1648,11 +1685,19 @@ namespace CPORLib.PlanningModel
 
 
                 Formula knewKnowledge = bsNew2.RemoveObservedPreCond(aOrg);
-                if (knewKnowledge == null || knewKnowledge.IsTrue(null)) //if a precondition was wrongfully removed
+                if (knewKnowledge == null || knewKnowledge.IsTrue(Observed)) //if a precondition was wrongfully removed
                     Problem.Domain.RestorePrecondition(aOrg);
-                else //TODO restore this
+                else
+                {
                     aMod.Observe = knewKnowledge;
-
+                    //bsNew2.AddObserved(knewKnowledge);
+                    HashSet<int> hsModified = m_bsInitialBelief.ReviseInitialBelief(knewKnowledge, this);
+                    if (hsModified.Count > 0)
+                    {
+                        if (!Options.OptimizeMemoryConsumption)
+                            bsNew2.PropogateObservedPredicates();
+                    }
+                }
                 return bsNew2;
             }
             else
@@ -1968,7 +2013,7 @@ namespace CPORLib.PlanningModel
             GeneratingAction.IdentifyActivatedOptions(m_sPredecessor.Observed, Observed);
 
 
-            PartiallySpecifiedState pssAux = m_sPredecessor.Apply(GeneratingAction, out fObserve, true);
+            PartiallySpecifiedState pssAux = m_sPredecessor.Apply(GeneratingAction, out fObserve, true);//todo is this supposed to be false
             if (pssAux.m_lObserved.Count == m_lObserved.Count)
                 return false;
             foreach (Predicate pObserve in pssAux.Observed)
@@ -3474,6 +3519,22 @@ namespace CPORLib.PlanningModel
         }
 
 
+    }
+
+    public class PSSEqualityComparer : IEqualityComparer<PartiallySpecifiedState>
+    {
+        // Override GetHashCode to provide custom hashing logic
+        public int GetHashCode(PartiallySpecifiedState pss)
+        {
+            return pss.Observed.ToString().GetHashCode();
+        }
+
+        // Override Equals to provide custom equality logic
+        public bool Equals(PartiallySpecifiedState x, PartiallySpecifiedState y)
+        {
+            if (x == null || y == null) return false;
+            return x.Observed.SetEquals(y.Observed);
+        }
     }
 }
 

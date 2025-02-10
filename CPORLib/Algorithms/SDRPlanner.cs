@@ -8,10 +8,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using static CPORLib.Tools.Options;
 using static CPORLib.Algorithms.PlannerBase;
 using Action = CPORLib.PlanningModel.PlanningAction;
+using static System.Collections.Specialized.BitVector32;
 
 namespace CPORLib.Algorithms
 {
@@ -26,7 +26,7 @@ namespace CPORLib.Algorithms
         public bool GoalReached { get { return CurrentState.IsGoalState(); } }
         private bool CheckGoalReached = true;
         public HashSet<Predicate> PredicatesToNegate;
-        public SDRPlanner(Domain domain, Problem problem, List<Predicate> toNegate) : base(domain, problem)    
+        public SDRPlanner(Domain domain, Problem problem) : base(domain, problem)    
         {
             Options.ComputeCompletePlanTree = false;
             Options.AddAllKnownToGiven = true; //this is needed in, e.g., medpks010
@@ -45,37 +45,38 @@ namespace CPORLib.Algorithms
                     }
                 }
             }
-            Problem fakeProb = new Problem(problem);
-            if (Options.OverSpecifyThreshold > 0)
+            Problem = new Problem(problem); //modify this back to Problem fakeProb
+            Domain = Problem.Domain;
+            if (Options.OverSpecifyPreconds)
             {
-                List<Predicate> fakePredicates = fakeProb.Domain.OverspecifyPreconditions();
+                List<Predicate> fakePredicates = Domain.OverspecifyPreconditions();
                 HashSet<Predicate> lGrounded = new HashSet<Predicate>();
                 foreach (ParametrizedPredicate p in fakePredicates)
                 {
-                    fakeProb.Domain.GroundPredicate(p, new Dictionary<Parameter, Constant>(),
+                    Domain.GroundPredicate(p, new Dictionary<Parameter, Constant>(),
                         new List<Argument>(p.Parameters), lGrounded);
                 }
                 foreach (Predicate p in lGrounded)
                 {
                     if (RandomGenerator.NextDouble() < Options.fakePredicateThreshold)
-                        fakeProb.AddKnown(p); //adding thate sometimes the predicate is true
+                        Problem.AddKnown(p); //adding that sometimes the predicate is true
                 }
 
             }
             else
             {
-                fakeProb.Domain.resetPreconditions();
+                Domain.resetPreconditions();
             }
-            Domain = fakeProb.Domain;
+            
             ExecutionData.NumberOfNegations = PredicatesToNegate.Count;
             Console.WriteLine($"Num of negations: {ExecutionData.NumberOfNegations}");
             foreach (Predicate p in PredicatesToNegate)
             {
                 //Console.WriteLine("negated this: " + p.ToString());
-                fakeProb.Known.Remove(p);
-                fakeProb.AddKnown(p.Negate());
+                Problem.Known.Remove(p);
+                Problem.AddKnown(p.Negate());
             }
-            BeliefState bsInitial = fakeProb.GetInitialBelief();
+            BeliefState bsInitial = Problem.GetInitialBelief();
             bool removeInaccuracies = (InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BL0 || InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BLOptimistic);
             if (removeInaccuracies)
                 bsInitial.ModifyProblemBeforeStateSelection(CurrentState);
@@ -127,8 +128,38 @@ namespace CPORLib.Algorithms
 
             }
             bool bPreconditionFailure = false;
+            
             if (FutureActions != null && NextActionIndex < FutureActions.Count)
             {
+                if (SDR_OBS)
+                {
+                    List<Action> lObservationActions = Domain.GroundAllObservationActions(CurrentState.Observed, true);
+                    int counter = 0;
+                    foreach (Action a in lObservationActions)
+                    {
+                        Predicate pObserve = ((PredicateFormula)a.Observe).Predicate;
+                        if (!CurrentState.Observed.Contains(pObserve) && !CurrentState.Observed.Contains(pObserve.Negate()) && !FutureActions.Contains(a.Name))
+                        {
+                            FutureActions.Insert(NextActionIndex, a.Name);
+                            if (Options.Verbose)
+                                Console.WriteLine("Inserted " + a.Name + " to plan");
+                            counter++;
+                        }
+                    }
+                    //clear the rest of the future actions to force replan after observations
+                    while (NextActionIndex + counter < FutureActions.Count)
+                    {
+                        string s = FutureActions[NextActionIndex + counter];
+                        if (Domain.GetActionByName(s).Observe == null)
+                            break;
+                        counter++;
+                    }
+                    if (counter > 0)
+                    {
+                        int i = NextActionIndex + counter;
+                        FutureActions.RemoveRange(i, FutureActions.Count - i);
+                    }
+                }
                 string sAction = FutureActions[NextActionIndex];
                 bool bPreconditionsHold = CurrentState.IsApplicable(sAction);
                 //Console.WriteLine("SDR: Checking applicability of action " + sAction +" : " + bPreconditionsHold);
@@ -139,6 +170,7 @@ namespace CPORLib.Algorithms
             }
 
             List<string> lPlan = Plan(CurrentState, bPreconditionFailure, out bool bDeadEndReached, out State sChosen);
+            
             if (lPlan == null || lPlan.Count ==0)
             {
                 Error = "Could not plan for the current state";
@@ -190,7 +222,7 @@ namespace CPORLib.Algorithms
             }
             CurrentState = psNext;
             NextActionIndex++;
-            if (NextActionIndex == FutureActions.Count || sObservation == "Fail")//(sObservation != null && sObservation != "Fail"))
+            if (NextActionIndex == FutureActions.Count || sObservation == "Fail")//(sObservation != null && sObservation != "Fail")) TODO
             {
                 FutureActions = null;
                 NextActionIndex = -1;
@@ -278,7 +310,6 @@ namespace CPORLib.Algorithms
                             if (ts.TotalMinutes > 60)
                                 throw new Exception("Execution taking too long");
                             Debug.WriteLine((int)(ts.TotalMinutes) + "," + cActions + ") " + Domain.Name + ", executing action " + sAction);
-                            Console.WriteLine("Executed " + sAction/* + ", received " + sObservation*/);
                             lExecutedPlans.Last().Add(sAction);
                             DateTime dtBefore = DateTime.Now;
 
@@ -287,6 +318,7 @@ namespace CPORLib.Algorithms
                             List<Formula> lDeadends = null;
                             if (pssNext != null)
                             {
+                                Console.WriteLine("Executed " + sAction/* + ", received " + sObservation*/);
                                 bPreconditionFailure = false;
                                 DeadEndExistence isDeadEnd = pssNext.IsDeadEndExistenceAll(out lDeadends);
                                 if (isDeadEnd == DeadEndExistence.DeadEndTrue)
@@ -301,7 +333,7 @@ namespace CPORLib.Algorithms
                             if (pssNext == null )
                             {
                                 bPlanEndedSuccessfully = false;
-                                Debug.WriteLine(Domain.Name + ", cannot execute " + sAction);
+                                Console.WriteLine(Domain.Name + ", cannot execute " + sAction + " FAIL");
 
                                 
                                 bPreconditionFailure = true;
@@ -326,7 +358,7 @@ namespace CPORLib.Algorithms
                                                 pssNext = pssNext.Apply(a, out fObserved);
                                                 lActions.Add(a.Name);
                                                 cObservations++;
-                                                Debug.WriteLine(Domain.Name + ", observed " + fObserved);
+                                                Console.WriteLine("Executed " + sAction +  ", observed " + fObserved);
                                                 cActions++;
                                             }
                                         }
@@ -336,7 +368,7 @@ namespace CPORLib.Algorithms
                                     if (fObserved != null)
                                     {
                                         cObservations++;
-                                        Debug.WriteLine(Domain.Name + ", observed " + fObserved);
+                                        Console.WriteLine("Executed " + sAction + ", observed " + fObserved);
 
                                     }
                                 }

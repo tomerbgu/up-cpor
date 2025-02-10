@@ -17,7 +17,7 @@ namespace CPORLib.FFCS
     {
 
         public static int MAX_CONSTANTS = 20000;
-        public static int MAX_PREDICATES = 400;
+        public static int MAX_PREDICATES = 3200;
         public static int MAX_TYPES = 50;
         public static int MAX_ARITY = 10;
         public static int MAX_VARS = 15;
@@ -26,7 +26,7 @@ namespace CPORLib.FFCS
         public static int MAX_TYPE = 20000;
 
 
-        public static  int MAX_OPERATORS = 400;
+        public static  int MAX_OPERATORS = 3200;
 
 
         /* in DNF: AND with OR - sons - collect 'hitting set':

@@ -9,6 +9,7 @@ using static CPORLib.FFCS.Output;
 
 using static CPORLib.FFCS.Constants;
 using static CPORLib.FFCS.FFUtilities;
+using System.Threading;
 
 
 
@@ -304,9 +305,12 @@ namespace CPORLib.FFCS
                 }
             }
             lehc_current_start = lehc_space_head.next;
-
+            CancellationToken currCancellationToken = Run.cancellationFlag;
             while (true)
             {
+                //this is where the "bfs" happens so this is where we should check the key
+                if (currCancellationToken.IsCancellationRequested)
+                    throw new TimeoutException("timeout");
                 if (lehc_current_start == lehc_current_end)
                 {
                     reset_ehc_hash_entrys();
@@ -329,6 +333,7 @@ namespace CPORLib.FFCS
                     break;
                 }
             }
+            
 
             reset_ehc_hash_entrys();
             //free(tmp);

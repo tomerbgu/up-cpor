@@ -1,74 +1,265 @@
 ﻿using CPORLib;
 using CPORLib.FFCS;
 using CPORLib.Tools;
+using OfficeOpenXml;
+using RunCPOR;
 using System;
 using System.IO;
+using System.Linq.Expressions;
+using System.Numerics;
+using static CPORLib.Tools.Options;
+using static CPORLib.Tools.RandomGenerator;
 
 public class Program
 {
-    public static void RunTest(string sName, bool bOnline)
+    static bool canOverride = true;
+    public static async Task RunTest(string sName, bool bOnline, string sPath)
     {
-        string sPath = @"C:\Users\travkaie\OneDrive - Intel Corporation\Documents\School\up-cpor\Tests\" + sName;
-        //string sPath = @"Tests/" + sName;
-        //string sPath = @"C:\Users\Guy\OneDrive - Ben Gurion University of the Negev\Research\projects\AIPlan4EU\up-cpor\Tests\" + sName;
+        
+        sPath = sPath + sName;
         string sDomainFile = Path.Combine(sPath, "d.pddl");
         string sProblemFile = Path.Combine(sPath, "p.pddl");
-        string sNegateFile = Path.Combine(sPath, "n.pddl");
         string sOutputFile = Path.Combine(sPath, "out.txt");
+
         Run.DomainInfo(sDomainFile, sProblemFile);
-        Run.RunPlanner(sDomainFile
-            , sProblemFile,
-            sNegateFile,
-            sOutputFile,
-            bOnline, false);
+        Console.WriteLine("Starting " + sName);
+
+        List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>> settings = new List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>>();
+        SetSettings(sName, settings);
+        
+
+        //memory of seeds that don't lead to deadends in each configuration
+        HashSet<int> NoDeadends = new HashSet<int>();
+
+        RandomGenerator.Init();
+        List<int> seeds = new List<int>();
+        for (int i = 0; i < Options.Iterations; i++)
+        {
+            seeds.Add(RandomGenerator.Next(1000));
+        }
+
+        List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> ExecutionData = new List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>>();
+        string folderPath = ExcelHelper.CreateOutputFolder(Path.GetDirectoryName(sDomainFile));
+
+        for (int j = 0; j < settings.Count; j++)
+        {
+            Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double> setting = settings[j];
+
+            Options.InaccuracyHandlingStrategy = setting.Item1;
+            //Options.FalsePositive = setting.Item2;
+            Options.UseCosts = setting.Item2;
+            Options.ActionCost = setting.Item3;
+            Options.UseFakePreds = setting.Item4;
+            Options.fakePredicateThreshold = setting.Item5;
+
+            if (j % 4 == 0)
+                NoDeadends = new HashSet<int>();
+
+            Console.WriteLine($"Settings: {setting}");
+            List<ExecutionData> ED = new List<ExecutionData>();
+            TimeSpan totalTime = TimeSpan.Zero; 
+            bool TimeOutFlag = false;
+            for (int i = 0; ED.Count < Options.Iterations && i < Options.MaxIterations; i++) // (int i = 0; i < cIterations; i++) // 
+            {
+                SetRandomSeed(i, seeds, NoDeadends);
+                if (canOverride)
+                {
+                    //Console.WriteLine("===================Overwriting random seed!!===================");
+                    //RandomGenerator.Init(768); //861 wumpus20 something weird with the stenches
+                    //RandomGenerator.Init(730); //doors7 something weird with the door that is open
+                    Console.WriteLine();
+                }
+
+                // Create a CancellationTokenSource to manage cancellation
+                var cts = new CancellationTokenSource();
+                var cancellationToken = cts.Token;
+
+                var result = StartPlanner(sDomainFile, sProblemFile, sOutputFile, bOnline, NoDeadends, false, cancellationToken);
+                int timing = 0;
+                while (timing++ < Options.MaxTime * Options.Factor && !result.IsCompleted)
+                    Thread.Sleep(1000 / Options.Factor);
+
+                if (!result.IsCompleted)
+                {
+                    Console.WriteLine("Main thread requests stop...");
+                    cts.Cancel();
+                    TimeOutFlag = true;
+                    break;
+                }
+
+                var res = await result;
+                if (res is null)
+                {
+                    //Console.WriteLine($"Timeout");
+                    continue;
+                }
+                //ExecutionData res = Run.RunPlanner(sDomainFile, sProblemFile, sOutputFile, bOnline, NoDeadends, false);
+
+                if (res.FailCount > 0)
+                {
+                    //Console.WriteLine($"Succeeded with {sdr.ExecutionData.FailCount} Fails");
+                }
+                if (res.ReplanningCount > 0)
+                {
+                    //Console.WriteLine($"Succeeded with {sdr.ExecutionData.ReplanningCount} deadends");
+                    ED.Add(res); //this is here bc it makes more sense for replanning
+                    Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
+                }
+                else
+                {
+                    Console.WriteLine($"Overspec did not lead to deadend");
+                }
+
+                if (Options.OverSpecifyPreconds)
+                    ED.Add(res);
+            }
+
+            foreach (var obj in ED)
+            {
+                totalTime += obj.Time;
+            }
+
+            if (!TimeOutFlag)
+                ExecutionData.Add(Tuple.Create(ED, TimeSpan.FromTicks(totalTime.Ticks / Math.Max(1, ED.Count)), InaccuracyHandlingStrategy, setting.ToString()));
+            
+            if (ED.Count > 0)
+            {
+
+                ExcelHelper.writeSummary(folderPath, ED, TimeSpan.FromTicks(totalTime.Ticks / ED.Count), setting.ToString());
+            }
+        }
+        ExcelHelper.WriteToExcel(folderPath, ExecutionData, settings.Select(t => t.ToString()).ToList());
     }
+
+    static async Task<ExecutionData> StartPlanner(string sDomainFile, string sProblemFile, string sOutputFile, bool bOnline, HashSet<int> NoDeadends, bool bValidate, CancellationToken cancellationToken)
+    {
+#pragma warning disable CS8603 // Possible null reference return.
+        return await Task.Run(() =>
+        {
+            try
+            {
+                return Run.RunPlanner(sDomainFile, sProblemFile, sOutputFile, bOnline, NoDeadends, false, cancellationToken);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                return null;
+            }
+
+        });
+#pragma warning restore CS8603 // Possible null reference return.
+    }
+
+    private static void SetSettings(string sName, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>> settings)
+    {
+        if (sName.StartsWith("wumpus"))
+            Options.SDR_OBS = true;
+        if (Options.FalsePositive)
+        {
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BL0, true));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, true));
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.FailHandler, true, 0, false, 0.0));
+        }
+        else
+        {
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BL0, false));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, false));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, false));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, false, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, false, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, false, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, false, 0.0));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.0));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.2));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.2));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.2));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.2));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.5));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.5));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.5));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.5));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.8));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.8));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.8));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.8));
+
+        }
+
+    }
+
+    private static void SetRandomSeed(int curr_i, List<int> seeds, HashSet<int> NoDeadEnds)
+    {
+
+
+        for (int i = curr_i; i < Options.MaxIterations; i++) // (int i = 0; i < cIterations; i++) // 
+        {
+            if (i < Options.Iterations)
+            {
+                if (NoDeadEnds.Contains(i))
+                {
+                    continue;
+                }
+                RandomGenerator.Init(seeds.ElementAt(i));
+                Console.WriteLine($"Random Seed {seeds.ElementAt(i)}");
+                return;
+            }
+            else
+            {
+                if (i >= seeds.Count)
+                    seeds.Add(RandomGenerator.Next(1000));
+                if (NoDeadEnds.Contains(i))
+                {
+                    continue;
+                }
+                RandomGenerator.Init(seeds.ElementAt(i));
+                Console.WriteLine($"Random Seed {seeds.ElementAt(i)}");
+                return;
+            }
+        }
+
+    }
+
+
     public static void TestAll(bool bOnline)
     {
-        //Options.Iterations = 1;
-        Options.threshold = 0;
-        FFUtilities.Verbose = false;
+        //FFUtilities.Verbose = false;
         Options.Verbose = true;
-        Options.FalsePositive = false;
+
+        //for FP/FN usecases
+        //Options.FalsePositive = false;
+        //Options.threshold = 0;
+
         gcmd_line.display_info = 0;
         gcmd_line.debug = 0;
+        string sPath = @"C:\Users\travkaie\OneDrive - Intel Corporation\Documents\School\up-cpor\Tests\";
+        //Options.SDR_OBS = true;
+        RunTest("unix1", bOnline, sPath);
+        //RunTest("unix2", bOnline, sPath);
+        //RunTest("unix4", bOnline, sPath);
+        //RunTest("blocks3", bOnline, sPath);
+        //RunTest("doors5", bOnline, sPath);
+        //RunTest("doors7", bOnline, sPath);
+        //RunTest("doors9", bOnline, sPath);
+        //RunTest("doors15", bOnline, sPath);
+        //RunTest("doors13", bOnline, sPath);
+        //RunTest("wumpus10", bOnline, sPath);
+        //RunTest("colorballs2-2", bOnline, sPath);
+        //RunTest("blocks3", bOnline, sPath);
 
-        //RunTest("unix1", bOnline);
-        //RunTest("unix2", bOnline);
-        //RunTest("unix3", bOnline);
-
-        RunTest("doors5", bOnline);
-        //RunTest("doors7", bOnline);
-        //RunTest("doors9", bOnline);
-        //RunTest("doors15", bOnline);
-        //RunTest("doors13", bOnline);
-        //RunTest("wumpus05", bOnline);
-        //RunTest("colorballs2-2", bOnline);
-        //RunTest("blocks3", bOnline);
         //RunTest("clog5", bOnline);
-
-        //RunTest("doors15FP", bOnline); //.3 might not be enough
-        //RunTest("wumpus10_test", bOnline); //nice
-        //RunTest("unix3", bOnline);
-        //RunTest("unix4", bOnline);
-        //RunTest("clog5", bOnline);//weirdDeadEnd
-        //RunTest("wumpus15clean", bOnline);
-        //RunTest("wumpus15FP", bOnline);//returns null
         //RunTest("colorballs11-2", bOnline);
         //RunTest("colorballs2-2", bOnline);
 
-
-        //RunTest("unix1", bOnline);
-        //RunTest("wumpus10", bOnline);
-        //RunTest("doors5", bOnline);
-        //RunTest("doors11", bOnline);
-        //RunTest("doors13", bOnline);
-        //RunTest("doors15", bOnline);
-
         //RunTest("blocks3", bOnline);
         //RunTest("unix3", bOnline);
-
-
-        //RunTest("wumpus5", bOnline);
 
 
         //RunTest("localize5", bOnline);
@@ -82,62 +273,19 @@ public class Program
         FFUtilities.Verbose = false;
         TestAll(true);
         return;
-
+        canOverride = false;
         if (args.Length < 1)
         {
             Console.WriteLine("Usage: RunPlanner domain_file problem_file [false_pos] [new] (verbose - optional)");
         }
         else
         {
-            Console.WriteLine(args[0]);
-            RunTest(args[0], true);
-            return;
-            string sDomainFile = args[0];
-            string sProblemFile = args[1];
-            string sNegateFile = args[2];
-            if (args.Length > 3)
+            if (args.Length == 2)
             {
-                
-                try
-                {
-                    Options.Iterations = int.Parse(args[3]);
-                }
-                catch { }
-                try
-                {
-                    Options.threshold = double.Parse(args[4]);
-                }
-                catch { }
-                try
-                {
-                    Options.FalsePositive = args[5] == "true";
-                }
-                catch { }
+                 int.TryParse(args[1], out Options.MaxTime);
             }
-            Console.WriteLine("Iterations: " + Options.Iterations);
-            Console.WriteLine("Threshold: " + Options.threshold);
-            //Console.WriteLine("False Positives: " + Options.FalsePositive);
-            //string sNegateFile = null;
-            //Console.WriteLine("Output Path: " + sOutputFile);
-            bool bOnline = true;
-            //if (args.Length > 3)
-            //{
-            //    if (args[2] == "false_pos")
-            //        Options.FalsePositive = true;
-            //    if (args[3] == "new")
-            //    {
-            //        if (Options.FalsePositive)
-            //            Options.InaccuracyHandlingStrategy = Options.InaccuracyHandlingStrategies.MakeTrue;
-            //        else
-            //            Options.InaccuracyHandlingStrategy = Options.InaccuracyHandlingStrategies.FailHandler;
-            //    }
-
-            //}
-            Run.RunPlanner(sDomainFile
-                , sProblemFile,
-                sNegateFile,
-                "",
-                bOnline);
+            _ = RunTest(args[0], true, @"Tests/");
+            return;
         }
     }
 

@@ -24,7 +24,7 @@ namespace CPORLib.PlanningModel
 
         public string Apply(PlanningAction a)
         {
-            PartiallySpecifiedState psNext = CurrentState.Apply(a, out Formula fObserve);
+            PartiallySpecifiedState psNext = CurrentState.Apply(a, out Formula fObserve, false, true);
             if (psNext == null)
                 return "Fail";
             CurrentState = psNext;

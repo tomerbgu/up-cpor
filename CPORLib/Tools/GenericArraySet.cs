@@ -181,6 +181,8 @@ namespace CPORLib.Tools
 
         public bool IsSupersetOf(IEnumerable<T> other)
         {
+            if (other is GenericArraySet<T> set)
+                return set.IsSubsetOf(this);
             throw new NotImplementedException();
         }
 
@@ -191,7 +193,7 @@ namespace CPORLib.Tools
 
         public bool SetEquals(IEnumerable<T> other)
         {
-            throw new NotImplementedException();
+            return IsSubsetOf(other) && IsSupersetOf(other);
         }
 
         public void SymmetricExceptWith(IEnumerable<T> other)

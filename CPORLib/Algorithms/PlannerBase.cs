@@ -302,10 +302,95 @@ namespace CPORLib.Algorithms
            
             return ManualSolve(dK,pK);
         }
-
+        Domain RelaxedDomain;
+        Dictionary<PartiallySpecifiedState, PartiallySpecifiedState> StateResultCache;
         private PartiallySpecifiedState forwardExpansion(PartiallySpecifiedState pss)
         {
-            Domain RelaxedDomain = Domain.RelaxAll();
+            if (RelaxedDomain == null)
+                RelaxedDomain = Domain.RelaxAll();
+            if (StateResultCache == null)
+                //can improve memory by not saving the entire state but only the observation list but this might cause issue
+                StateResultCache = new Dictionary<PartiallySpecifiedState, PartiallySpecifiedState>(new PSSEqualityComparer()); //not sure if its ok to use this comparer.
+
+            var currentState = pss.Clone();
+            currentState.m_bsInitialBelief.ChooseState(true);
+            //if i find a diff state that has max subset of my observed then i can use take its results bc im in relaxed domain
+            PartiallySpecifiedState prev = currentState;
+            while (prev.Predecessor != null)
+            {
+                prev = prev.Predecessor;
+                if (StateResultCache.ContainsKey(prev)) {
+                    currentState.Observed.UnionWith(StateResultCache[prev].Observed);
+                    break; //no need to go back more than one bc of relaxed domain
+                }
+            }
+            //this is outside the loop bc it is considering the relaxed domain
+            HashSet<PlanningAction> actionsCache = new HashSet<PlanningAction>();
+
+            HashSet<PartiallySpecifiedState> statesVisited = new HashSet<PartiallySpecifiedState>(new PSSEqualityComparer()); //not sure if its ok to use this comparer
+            while (!StateResultCache.ContainsKey(currentState))
+            {
+                statesVisited.Add(currentState);
+                if (currentState.Contains(Problem.Goal))
+                {
+                    foreach (PartiallySpecifiedState s in statesVisited)
+                        StateResultCache[s] = currentState;
+                    return currentState;
+                }
+                List<PlanningAction> actions = RelaxedDomain.GroundAllActuationActions(currentState.Observed, true);
+                actions = actions.Where(a => !actionsCache.Contains(a)).ToList();
+                List<PlanningAction> actionsFiltered = new List<PlanningAction>();
+
+                foreach (var action in actions)
+                {
+                    //check if there is reason to do this action
+                    if (currentState.ConsistentWith(action.Effects, false))
+                    {
+                        actionsCache.Add(action);
+                        continue;
+                    }
+                    //check if there is a difference between this and something else in the statesvisited
+                    actionsFiltered.Add(action);
+                    
+                }
+                if (actionsFiltered.Count() == 0)
+                    StateResultCache[currentState] = currentState;
+                //apply each action
+                bool changed = false;
+                foreach (var action in actionsFiltered)
+                {
+
+                    var newState = currentState.Apply(action, out Formula fObserve);
+                    if (newState == null)
+                        continue;
+                    statesVisited.Add(newState);
+                    changed = true;
+                    actionsCache.Add(action);
+                    currentState = newState;
+
+                    if (fObserve != null)
+                    {
+                        throw new Exception("problem with action during foward expansion");
+                        currentState.AddObserved(fObserve);
+                    }
+
+                    if (currentState.Contains(Problem.Goal))
+                    {
+                        foreach (PartiallySpecifiedState s in statesVisited)
+                            StateResultCache[s] = currentState;
+                        return currentState;
+                    }
+                }
+                if (!changed)
+                    foreach (PartiallySpecifiedState s in statesVisited)
+                        StateResultCache[s] = currentState;
+            }
+            return StateResultCache[currentState];
+        }
+        private PartiallySpecifiedState forwardExpansionOld(PartiallySpecifiedState pss)
+        {
+            if (RelaxedDomain == null)
+                RelaxedDomain = Domain.RelaxAll();
             var pssWork = pss.Clone();
             pssWork.m_bsInitialBelief.ChooseState(true);
             HashSet<PlanningAction> actionsCache = new HashSet<PlanningAction>();
@@ -389,7 +474,7 @@ namespace CPORLib.Algorithms
             //    Domain.SelectAndRemoveActionPreconditionRandom(pssCurrent);
             pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, bPreconditionFailure, out int cTags, out Domain dTagged, out Problem pTagged, false, null);
 
-
+            //var forDebug  = pTagged.Known.Where(x=>x.Name.Contains("file-in-dir")).ToList();
             if (!WriteAllKVariations || cTags == 1)
             {
                 bool deadend = false;
@@ -418,27 +503,45 @@ namespace CPORLib.Algorithms
                     Problem pTaggedDE = null;
                     if (Options.InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.OverspecifiedPrecondition)
                     {
-                        bool first = true;
+                        bool first = true; //helpful for debug
                         //get fully expanded forward search state
-                        PartiallySpecifiedState expandedState = forwardExpansion(pssCurrent);
+                        PartiallySpecifiedState expandedState = null;
                         while (lPlan == null || lPlan.Count==0) //TODO make sure you dont get stuck in infinite loop
                         {
                             //for each action check if only one preconditions does not hold
                             if (Options.UseCosts)
                             {
+                                bool trackStats = false;
+                                if (trackStats)
+                                {
+                                    expandedState = forwardExpansion(pssCurrent);
+                                    Domain.GetRelaxedActionsByPriority(expandedState, trackStats);
+                                }
                                 Predicate NoOverSpecifications = new GroundedPredicate("NoOverSpecifications");
                                 Domain.AddNoOverSpecifications(NoOverSpecifications);
+                            }
+                            else if (expandedState == null)
+                            {
+                                //Console.WriteLine("FE");
+                                //DateTime dtStart = DateTime.Now;
+                                expandedState = forwardExpansion(pssCurrent);
+                                //DateTime dtEnd = DateTime.Now;
+                                //TimeSpan diff = dtEnd - dtStart;
+                                //Console.WriteLine("FE Finished " + diff.TotalSeconds + " seconds");
+
+                                //expandedState = forwardExpansionOld(pssCurrent);
                             }
                             //pssCurrent.AddObserved(NoOverSpecifications);
                             //pssCurrent.m_bsInitialBelief.AddObserved(NoOverSpecifications);
                             //pssCurrent.Problem.AddKnown(NoOverSpecifications);
                             //Problem.AddKnown(NoOverSpecifications);
 
-                            List<PlanningAction> newActions = Domain.GetRelaxedActionsByPriority(expandedState, first);
+                            List<PlanningAction> newActions = Domain.GetRelaxedActionsByPriority(expandedState);
                             List<PlanningAction> oldActions = Domain.Actions;
-                            //todo you can olse create clone of domain
+                            //todo you can also create clone of domain
                             Domain.Actions = newActions;
                             Domain.ComputeAlwaysKnown();
+
                             if (Options.Verbose) 
                                 Console.WriteLine("Modified Actions");
 
@@ -472,6 +575,7 @@ namespace CPORLib.Algorithms
                                     Domain.Actions = oldActions;
                                     Domain.RemoveInjectedActionsAndPredicates(lPlan);
                                     Domain.ComputeAlwaysKnown();
+                                    
                                 }
                             }
                             catch (DeadendException e)

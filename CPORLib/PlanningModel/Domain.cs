@@ -2407,6 +2407,41 @@ namespace CPORLib.PlanningModel
             return aGrounded;
         }
 
+        public PlanningAction GroundActionByNamePrecond(string[] asAction, Formula Precond)
+        {
+            string sActionName = asAction[0];
+            PlanningAction a = GetActionByName(sActionName);
+            if (!(a is ParametrizedAction))
+                return a;
+            ParametrizedAction pa = (ParametrizedAction)a.Clone();
+            pa.Preconditions = Precond;
+            Dictionary<Parameter, Constant> dBindings = GetBindings(pa, asAction);
+
+            if (dBindings == null)
+                return null;
+
+            Formula fGroundedPreconditions = null;
+            if (pa.Preconditions != null)
+                fGroundedPreconditions = pa.Preconditions.Ground(dBindings);
+            else if (pa.Effects != null)
+                pa.Effects.Ground(dBindings);
+            else if (pa.Observe != null)
+                pa.Observe.Ground(dBindings);
+            string sName = pa.Name;
+            foreach (Parameter p in pa.Parameters)
+                sName += Utilities.DELIMITER_CHAR + dBindings[p].Name;
+            PlanningAction aGrounded = new PlanningAction(sName);
+            aGrounded.Preconditions = fGroundedPreconditions;
+            if (pa.Effects != null)
+            {
+                aGrounded.SetEffects(pa.Effects.Ground(dBindings));
+
+            }
+            if (pa.Observe != null)
+                aGrounded.Observe = pa.Observe.Ground(dBindings);
+            return aGrounded;
+        }
+
         public void GroundPredicate(ParametrizedPredicate pp, Dictionary<Parameter, Constant> dBindings, List<Argument> lRemaining, HashSet<Predicate> lGrounded)
         {
             if (lRemaining.Count == 0)
@@ -2674,7 +2709,7 @@ namespace CPORLib.PlanningModel
 
         public List<PlanningAction> GroundAllRelaxedActions(PartiallySpecifiedState pss, List<PlanningAction> relaxedActions, bool bRemoveConstantPredicates)
         {
-            List<PlanningAction> lAllGrounded = new List<PlanningAction>();
+            HashSet<PlanningAction> lAllGrounded = new HashSet<PlanningAction>();
             Dictionary<Parameter, Constant> dBindings = new Dictionary<Parameter, Constant>();
             List<Parameter> lToBind = null;
             List<Constant> lConstants = new List<Constant>();
@@ -2793,8 +2828,10 @@ namespace CPORLib.PlanningModel
 
                 foreach (PlanningAction a in lGrounded)
                 {
-                    if (!lAllGrounded.Contains(a))
+                    //if (a.Effects==null || !pss.ConsistentWith(a.Effects, false)) //problematic in blocks domain.
                         lAllGrounded.Add(a);
+                    //else
+                    //    lAllGrounded.Add(a);
                 }
                 cIterations++;
 
@@ -2824,7 +2861,7 @@ namespace CPORLib.PlanningModel
                 }
             }
 
-            return lAllGrounded;
+            return lAllGrounded.ToList();
         }
 
         public List<PlanningAction> GroundAllActuationActions(ISet<Predicate> lPredicates, bool bContainsNegations)
@@ -2835,7 +2872,7 @@ namespace CPORLib.PlanningModel
 
             foreach (PlanningAction a in Actions)
             {
-                if (a.Observe == null)
+                if (a.Effects != null)
                 {
                     if (a is ParametrizedAction)
                     {
@@ -3843,6 +3880,13 @@ namespace CPORLib.PlanningModel
         internal List<Predicate> OverspecifyPreconditions()
         {
             int actionToOverSpecify = RandomGenerator.Next(Actions.Count);
+            if (Name == "wumpus")
+            {
+                //these are the only actions in wumpus that will lead to deadend
+                HashSet<string> viable = new HashSet<string> { "move" , "grab" };
+                while (!viable.Contains(Actions[actionToOverSpecify].Name))
+                    actionToOverSpecify = (actionToOverSpecify + 1) % Actions.Count;
+            }
             bool addPrecond = true;
             List<Predicate> fakePredicates = new List<Predicate>();
             for (int aIndex = 0; aIndex < Actions.Count; aIndex++)
@@ -3850,7 +3894,7 @@ namespace CPORLib.PlanningModel
                 PlanningAction a = Actions[aIndex];
                 if (AllowMultipleOverSpecifications)
                 {
-                    if (RandomGenerator.NextDouble() > Options.OverSpecifyThreshold)
+                    if (RandomGenerator.NextDouble() > Options.fakePredicateThreshold)
                     {
                         continue;
                     }
@@ -3933,13 +3977,13 @@ namespace CPORLib.PlanningModel
             return fakePredicates;
         }
 
-        public List<PlanningAction> GetRelaxedActionsByPriority(PartiallySpecifiedState pss, bool first)
+        public List<PlanningAction> GetRelaxedActionsByPriority(PartiallySpecifiedState pss, bool forStatsOnly=false)
         {
             //sort by number/percent of preconditions that are feasible, remove only preconditions that are not feasible
             Dictionary<PlanningAction, float> actionDictionary = new Dictionary<PlanningAction, float>();
             Dictionary<Formula, bool> preconditionCache = new Dictionary<Formula, bool>();
-            var relaxedActionsList = GetAllRelaxedActions(pss);
-            if (Options.UseCosts)
+            var relaxedActionsList = GetAllRelaxedActions(pss, forStatsOnly);
+            if (!forStatsOnly && Options.UseCosts)
                 return relaxedActionsList.ToList();
             foreach (PlanningAction a in relaxedActionsList)
             {
@@ -3984,9 +4028,9 @@ namespace CPORLib.PlanningModel
                 }
             }
             if (Options.FixOneAtATime)
-                return GetRelevantActionModificationsOneAtATime(actionDictionary, first);
+                return GetRelevantActionModificationsOneAtATime(actionDictionary, forStatsOnly);
             else
-                return GetRelevantActionModifications(actionDictionary, first);
+                return GetRelevantActionModifications(actionDictionary);
         }
 
         private string getActionNameClean(string actionNameDirty)
@@ -3994,17 +4038,25 @@ namespace CPORLib.PlanningModel
             return actionNameDirty.Substring(0, actionNameDirty.Length - 1);
         }
 
-        private List<PlanningAction> GetRelevantActionModificationsOneAtATime(Dictionary<PlanningAction, float> precondStatistics, bool first)
+        private List<PlanningAction> GetRelevantActionModificationsOneAtATime(Dictionary<PlanningAction, float> precondStatistics, bool forStatsOnly = false)
         {
             List<PlanningAction> selectedActions = new List<PlanningAction>();
             PlanningAction aTag;
-            var combosNotTried1 = precondStatistics.Where(entry => !PreviouslyModifiedActions.Contains(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0])).ToList();
-            combosNotTried1 = combosNotTried1.Where(entry => char.IsDigit(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0][entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0].Length - 1])).ToList();
-            var entryWithMaxValue1 = combosNotTried1.OrderBy(entry => entry.Value).Reverse().FirstOrDefault();
+            var combosNotTried = precondStatistics.Where(entry => !PreviouslyModifiedActions.Contains(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0])).ToList();
+            var actionsNotExhausted = combosNotTried.Where(entry => char.IsDigit(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0][entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0].Length - 1])).ToList(); //todo this is necessary somewhere if we dont filter normal actions
+            var entryWithMaxValue1 = actionsNotExhausted.OrderBy(entry => entry.Value).Reverse().FirstOrDefault();
             string resultActionName1 = entryWithMaxValue1.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0];
-            if (Options.Verbose) 
-                Console.WriteLine(resultActionName1);
-            PreviouslyModifiedActions.Add(resultActionName1);
+            if (Options.Verbose)
+            {
+                var forTieBreak = actionsNotExhausted.Where(entry => entry.Value == entryWithMaxValue1.Value).ToList();
+                Console.WriteLine($"There were {forTieBreak.Count}/{actionsNotExhausted.Count} actions with val {entryWithMaxValue1.Value}");
+                var distinctActions = forTieBreak.Select(entry => entry.Key.Name.Split('~')[0]).GroupBy(action => action).ToDictionary(group => group.Key, group => group.Count());
+                Console.WriteLine($"There were {distinctActions.Count} distinct action preconditions with val {entryWithMaxValue1.Value}");
+                Console.WriteLine(string.Join(Environment.NewLine, distinctActions.Select(kvp => $"{kvp.Key}: {kvp.Value}")));
+                Console.WriteLine($"--------{resultActionName1}--------");
+            }
+            if (!forStatsOnly)
+                PreviouslyModifiedActions.Add(resultActionName1);
             int precondToRemove1 = (int)char.GetNumericValue(resultActionName1[resultActionName1.Length - 1]);
             foreach (PlanningAction a in Actions)
             {
@@ -4034,7 +4086,7 @@ namespace CPORLib.PlanningModel
 
         }
 
-        private List<PlanningAction> GetRelevantActionModifications(Dictionary<PlanningAction, float> precondStatistics, bool first)
+        private List<PlanningAction> GetRelevantActionModifications(Dictionary<PlanningAction, float> precondStatistics)
         {
             List<PlanningAction> selectedActions = new List<PlanningAction>();
             PlanningAction aTag;
@@ -4085,7 +4137,7 @@ namespace CPORLib.PlanningModel
             {
                 a.Preconditions = originalPreconditions[a.Name];
 
-                relaxedActions.Add(a); //todo is this necessary
+                relaxedActions.Add(a); //this is necessary bc otherwise you can't use an exhausted action
                 if (a.Preconditions == null)
                 {
                     continue;
@@ -4109,6 +4161,8 @@ namespace CPORLib.PlanningModel
                         PlanningAction aMod = a.Clone();
                         aMod.Name += i;
                         aMod.Preconditions = newPreconditions;
+                        if (newPreconditions.Operands.Count == 0)
+                            aMod.Preconditions = null;
                         if (!PreviouslyModifiedActions.Contains(aMod.Name))
                             relaxedActions.Add(aMod);
                     }
@@ -4122,7 +4176,7 @@ namespace CPORLib.PlanningModel
         {
             List<PlanningAction> relaxedActions = new List<PlanningAction>();
 
-            List<PlanningAction> deleteRelaxationActions = Actions;//getDeleteRelaxationActions(); //
+            List<PlanningAction> deleteRelaxationActions = Actions; //getDeleteRelaxationActions(); //Actions
             foreach (ParametrizedAction a in deleteRelaxationActions)
             {
                 a.Preconditions = originalPreconditions[a.Name];
@@ -4191,7 +4245,7 @@ namespace CPORLib.PlanningModel
             {
                 if (a.Effects == null)
                 {
-                    deleteRelaxationActions.Add(a.Clone());
+                    deleteRelaxationActions.Add(a.Clone()); //needed bc sometimes a sensing action can be the stoppage
                 }
                 else if (!(a.Effects is CompoundFormula))
                 {
@@ -4244,7 +4298,7 @@ namespace CPORLib.PlanningModel
                 {
                     pa.Preconditions = pfPrecond;
                     AddPredicate(pi);
-                    cfEffect.AddOperand(pfPrecond);
+                    //cfEffect.AddOperand(pfPrecond);
                 }
                 else if (!Options.AllowMultipleOverSpecifications)
                 {
@@ -4269,10 +4323,10 @@ namespace CPORLib.PlanningModel
 
 
         }
-        private IEnumerable<PlanningAction> GetAllRelaxedActions(PartiallySpecifiedState pss)
+        private IEnumerable<PlanningAction> GetAllRelaxedActions(PartiallySpecifiedState pss, bool forStatsOnly=false)
         {
             List<PlanningAction> relaxedActions;
-            if (!Options.UseCosts)
+            if (!Options.UseCosts || forStatsOnly)
             {
                 relaxedActions = GetActionsWOPrecondition();
                 return GroundAllRelaxedActions(pss, relaxedActions, true);
@@ -4432,8 +4486,12 @@ namespace CPORLib.PlanningModel
             var modifiedActions = lPlan.Where(entry => entry.Contains("fakePreReq") && entry.EndsWith("-0")).ToList();
             if (modifiedActions.Count() > 0)
             {
-                if (Options.Verbose) 
-                    Console.WriteLine("----"+modifiedActions.ElementAt(0)+ "----");
+                if (Options.Verbose)
+                {
+                    Console.WriteLine("----" + modifiedActions.ElementAt(0) + "----");
+                    //print some stats
+
+                }
                 var fakeActions = lPlan.Where(entry => entry.Contains("fakePreReq")).ToList();
                 foreach (string s in fakeActions)
                 {

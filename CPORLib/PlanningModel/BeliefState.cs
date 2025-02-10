@@ -260,7 +260,7 @@ namespace CPORLib.PlanningModel
                 {
                     m_lProblematicTag = new HashSet<Predicate>();
                     foreach (Predicate p in lAssignment)
-                        //if (!Problem.Domain.m_lAlwaysKnown.Contains(p.Name))
+                        //if (!(Problem.Domain.AlwaysConstant(p) && Problem.Domain.AlwaysKnown(p)))
                         m_lProblematicTag.Add(p);
                 }
 
@@ -360,11 +360,9 @@ namespace CPORLib.PlanningModel
                 Formula fCurrent = fOriginal, fReduced = null;
                 foreach (Predicate p in m_lProblematicTag)
                 {
-                    HashSet<Predicate> lAssignment = new HashSet<Predicate>();
-                    lAssignment.Add(p);
-                    fReduced = fCurrent.Reduce(lAssignment);
+                    fReduced = fCurrent.Reduce(new HashSet<Predicate> { p });
                     if (!fReduced.Equals(fCurrent))
-                        lFiltered.Add(p);
+                        lFiltered.Add(p); 
                     if (fReduced.IsTrue(null))
                     {
                         break;

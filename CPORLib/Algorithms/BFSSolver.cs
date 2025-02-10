@@ -85,11 +85,11 @@ namespace CPORLib.Algorithms
                 }
                 Console.Write("Choose action number: ");
                 int iAction = int.Parse(Console.ReadLine());
-                if (iAction < 0)
+                if (iAction < 0 || iAction > lActions.Count)
                     return null;
                 a = lActions[iAction];
                 
-                NextState = CurrentState.Apply(a, out Formula fObserve);
+                NextState = sCurrent.Apply(a, out Formula fObserve);
                 if (NextState != null)
                 {
                     foreach (Predicate pNew in NextState.Observed)
