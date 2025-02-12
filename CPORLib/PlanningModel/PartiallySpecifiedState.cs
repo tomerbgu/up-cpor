@@ -486,7 +486,8 @@ namespace CPORLib.PlanningModel
             while (pssCurrent.m_sPredecessor != null)
             {
                 //fReduced = fCurrent.Reduce(pssCurrent.Observed);
-                ISet<Predicate> filtered = pssCurrent.Observed;//TODO new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
+                //todo this is probably incorrect
+                ISet<Predicate> filtered = new HashSet<Predicate>(pssCurrent.Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name))); //TODO 
                 fReduced = fCurrent.Reduce(filtered);
                 if (fReduced.IsTrue(null))
                     return true;
@@ -554,13 +555,16 @@ namespace CPORLib.PlanningModel
             Formula originalPrecond = Problem.Domain.originalPreconditions[actionName[0]];
             Action aLifted = Problem.Domain.GetActionByName(actionName[0]);
             Action aReal = Problem.Domain.GroundActionByNamePrecond(actionName, originalPrecond);
+            bool failScenarioFlag = false;
             if (!aLifted.Preconditions.Equals(originalPrecond))
             {
                 //if only the removed pred is not true, restore precond
                 //todo make sure this matches mixes of uncertainties in init domain (FN/FP)
                 Formula op = aReal.Preconditions;
                 List<Predicate> removedPred = op.GetAllPredicates().Where(p => !a.Preconditions.GetAllPredicates().Select(obj => obj.ToString()).Contains(p.ToString())).ToList();
-                if (removedPred.Count > 0)
+                List<Predicate> otherPred = op.GetAllPredicates().Where(p => !removedPred.Contains(p) && !Verified.Contains(p) && Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)).ToList();
+
+                if (removedPred.Count > 0 && otherPred.Count==0)
                 {
                     aLifted.Preconditions = originalPrecond;
                     ParametrizedAction pa = (ParametrizedAction)aLifted;
@@ -569,10 +573,17 @@ namespace CPORLib.PlanningModel
                     foreach (Predicate p in removedPred)
                     {
                         PredicateFormula pf = new PredicateFormula(p);
-                        //PredicateFormula f = (PredicateFormula)pf.Ground(bindings);
-                        if (Problem.Known.Contains(pf.Predicate.Negate()) || (!Problem.Known.Contains(pf.Predicate) && Problem.Domain.AlwaysKnown(pf.Predicate)))
+
+                        //check1 = has the removed precondition predicate been verified? if so this leads to believe that it was wrongfully removed
+                        if (Verified.Contains(pf.Predicate.Negate()))
                             return null;
-                        if (Problem.Unknown.Contains(pf.Predicate)) {
+
+                        //check2 = if not, but it is considered always known and not an uncertainty then this leads to believe that it was wrongfully removed
+                        if (!Problem.Known.Contains(pf.Predicate) && Problem.Domain.AlwaysKnown(pf.Predicate) && Problem.Domain.Uncertainties.Contains(pf.Predicate))
+                            return null;
+
+                        if (Problem.Unknown.Contains(pf.Predicate))
+                        {
                             //m_bsInitialBelief.AddObserved(pf.Predicate.Negate()); //todo is this valid?this will happen later
                             AddObserved(pf.Predicate.Negate());
                             Problem.Known.Add(pf.Predicate.Negate());
@@ -583,7 +594,11 @@ namespace CPORLib.PlanningModel
                     return null;
 
                 }
-                throw new Exception("BUG - we aren't supposed to reach here!");
+                //throw new Exception("BUG - we aren't supposed to reach here!");
+            }
+            else
+            {
+                failScenarioFlag = true;
             }
             foreach (Predicate p in filteredPred)
             {
@@ -629,7 +644,8 @@ namespace CPORLib.PlanningModel
             {
                 CompoundFormula cf = new CompoundFormula("or");
                 cf.AddOperand(toRegress);
-                cf.SimpleAddOperand(toRegress.Negate());
+                if (!failScenarioFlag)
+                    cf.SimpleAddOperand(toRegress.Negate());
                 Problem.AddHidden(cf);
                 m_bsInitialBelief.Hidden.Add(cf);
             }
@@ -648,9 +664,10 @@ namespace CPORLib.PlanningModel
             cff.AddOperand(toRegress);
 
             //TODO TOMER WHY WAS THIS NECESSARY - RUN REGRESSION TESTS
-            cff.SimpleAddOperand(toRegress.Negate().Simplify());
+            if (!failScenarioFlag)
+                cff.SimpleAddOperand(toRegress.Negate().Simplify());
 
-            m_bsInitialBelief.ReviseInitialBelief(cff, this);
+            m_bsInitialBelief.ReviseInitialBelief(cff, this, true);
 
             a.PreconditionsVerified = true;
             return cff;
@@ -1685,13 +1702,19 @@ namespace CPORLib.PlanningModel
 
 
                 Formula knewKnowledge = bsNew2.RemoveObservedPreCond(aOrg);
-                if (knewKnowledge == null || knewKnowledge.IsTrue(Observed)) //if a precondition was wrongfully removed
+                string[] actionName = Utilities.SplitString(aOrg.Name, Utilities.DELIMITER_CHAR[0]);
+                Formula originalPrecond = Problem.Domain.originalPreconditions[actionName[0]];
+                Action aLifted = Problem.Domain.GetActionByName(actionName[0]);
+                
+                if (knewKnowledge == null || (!knewKnowledge.Simplify().IsTrue(null) && knewKnowledge.IsTrue(Observed)) && !aLifted.Preconditions.Equals(originalPrecond)) //if a precondition was wrongfully removed
                     Problem.Domain.RestorePrecondition(aOrg);
                 else
                 {
+                    if (knewKnowledge is CompoundFormula cf && knewKnowledge.Simplify().IsTrue(null))
+                        m_bsInitialBelief.Hidden.Add(cf);
                     aMod.Observe = knewKnowledge;
                     //bsNew2.AddObserved(knewKnowledge);
-                    HashSet<int> hsModified = m_bsInitialBelief.ReviseInitialBelief(knewKnowledge, this);
+                    HashSet<int> hsModified = m_bsInitialBelief.ReviseInitialBelief(knewKnowledge, this, true);
                     if (hsModified.Count > 0)
                     {
                         if (!Options.OptimizeMemoryConsumption)
@@ -1941,7 +1964,7 @@ namespace CPORLib.PlanningModel
             }
         }
 
-        public Formula RegressObservation(Formula f)
+        public Formula RegressObservation(Formula f, bool actionFailureFlag = false)
         {
             /* There is no point in adding the observation, because it was already regressed
             CompoundFormula fWithObservation = new CompoundFormula("and");
@@ -1951,11 +1974,12 @@ namespace CPORLib.PlanningModel
             Formula fReduced = fWithObservation.Reduce(Observed);
              */
             ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
-            Formula fToRegress = f.Reduce(filtered);
+            Formula fToRegress = !actionFailureFlag ? f.Reduce(filtered) : f;
             if (fToRegress is CompoundFormula)
             {
                 bool bChanged = false;
-                fToRegress = ((CompoundFormula)fToRegress).RemoveNestedConjunction(out bChanged).Simplify();
+                fToRegress = ((CompoundFormula)fToRegress).RemoveNestedConjunction(out bChanged);
+                fToRegress = !actionFailureFlag ? fToRegress.Simplify() : fToRegress;
             }
             if (fToRegress.IsTrue(null) || GeneratingAction==null)
                 return fToRegress;

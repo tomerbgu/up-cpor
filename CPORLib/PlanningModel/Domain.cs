@@ -4557,6 +4557,7 @@ namespace CPORLib.PlanningModel
             {
                 Predicate fp = new ParametrizedPredicate("fakePredicate-" + i);
                 FakePredicates.Add(fp);
+                AddUncertainty(fp);
             }
         }
     }

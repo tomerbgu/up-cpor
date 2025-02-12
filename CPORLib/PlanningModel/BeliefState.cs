@@ -3337,7 +3337,7 @@ namespace CPORLib.PlanningModel
         }
 
         int count_revisions = 0;
-        public HashSet<int> ReviseInitialBelief(Formula fObserve, PartiallySpecifiedState pssLast)
+        public HashSet<int> ReviseInitialBelief(Formula fObserve, PartiallySpecifiedState pssLast, bool actionFailureFlag = false)
         {
             
             DateTime dtBefore = DateTime.Now;
@@ -3367,14 +3367,14 @@ namespace CPORLib.PlanningModel
                 HashSet<Predicate> hsNew = new HashSet<Predicate>();
                 foreach (Formula fCurrent in lCurrentFormulas)
                 {
-                    if (fCurrent.IsTrue(pssCurrent.Observed))
+                    if (fCurrent.IsTrue(pssCurrent.Observed) && (!actionFailureFlag || !fCurrent.Simplify().IsTrue(null)))
                         continue;//used to be break but I think that if we got here then there is no point in continuing...
                     //is false doesn't properly work here
                     //Debug.Assert(fCurrent.IsFalse(pssCurrent.Observed), "Rgression of an observation returned false");
                     //pssCurrent.GeneratingAction.ClearConditionsChoices();
                     //pssCurrent.GeneratingAction.RemoveImpossibleOptions(pssCurrent.Observed); Need to this after the regression (below)
                     //DateTime dt = DateTime.Now;
-                    Formula fRegressed = pssCurrent.RegressObservation(fCurrent);
+                    Formula fRegressed = pssCurrent.RegressObservation(fCurrent, actionFailureFlag);
                     //ts1 += DateTime.Now - dt;
                     if (fRegressed is CompoundFormula)
                     {

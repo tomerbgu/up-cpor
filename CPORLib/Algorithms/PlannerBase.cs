@@ -261,7 +261,8 @@ namespace CPORLib.Algorithms
         {
 
             BFSSolver solver = new BFSSolver();
-            
+            if (state.m_bsInitialBelief.UnderlyingEnvironmentState == null)
+                state.m_bsInitialBelief.ChooseState(true);
 
             Action lAction = solver.ManualSolve(p, d, state, true);
 
@@ -501,7 +502,7 @@ namespace CPORLib.Algorithms
                     int ctags;
                     Domain dTaggedDE = null;
                     Problem pTaggedDE = null;
-                    if (Options.InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.OverspecifiedPrecondition)
+                    if (Options.OverspecifiedPreconditions)
                     {
                         bool first = true; //helpful for debug
                         //get fully expanded forward search state

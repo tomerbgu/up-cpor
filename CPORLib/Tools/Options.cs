@@ -14,24 +14,24 @@ namespace CPORLib.Tools
 
         public static DeadendStrategies DeadendStrategy = DeadendStrategies.Lazy;
 
-        public enum InaccuracyHandlingStrategies { FailHandler, Baseline, MakeTrue, BL0, BLOptimistic, OverspecifiedPrecondition };
+        public enum InaccuracyHandlingStrategies { FailHandler, Baseline, MakeTrue, BL0, BLOptimistic};
         public static InaccuracyHandlingStrategies InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.FailHandler;
         public static bool FalsePositive = true; //false creates deadends. true creates failures
 
+        public static bool OverspecifiedPreconditions = true;
         public static bool AllowMultipleOverSpecifications = false;
         public static bool FixOneAtATime = true; //for overspecified preconditions
         public static bool UseCosts = true;
         public static int ActionCost = 5;
-        public static bool OverSpecifyPreconds = false;
         public static bool UseFakePreds = false;
         public static int NumFakePreds = 1;
         public static double fakePredicateThreshold = 0;
 
         public static bool Verbose = false;
-        public static double threshold = 0.4;
+        public static double threshold = 0.2;
         public static int Iterations = 30;
-        public static int MaxIterations = 1;
-        public static int MaxTime = 600;
+        public static int MaxIterations = 10;
+        public static int MaxTime = 60;
         public static int Factor = 3;
 
 

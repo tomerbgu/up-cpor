@@ -64,9 +64,13 @@ public class Program
                 SetRandomSeed(i, seeds, NoDeadends);
                 if (canOverride)
                 {
-                    //Console.WriteLine("===================Overwriting random seed!!===================");
-                    //RandomGenerator.Init(768); //861 wumpus20 something weird with the stenches
+                    Console.WriteLine("===================Overwriting random seed!!===================");
+                    //RandomGenerator.Init(353); //blocks 198 weirdDeadend, 353 real dead end?!?!?
+                    RandomGenerator.Init(598);
+
                     //RandomGenerator.Init(730); //doors7 something weird with the door that is open
+                    //RandomGenerator.Init(673); //861 wumpus20 something weird with the stenches
+
                     Console.WriteLine();
                 }
 
@@ -110,7 +114,7 @@ public class Program
                     Console.WriteLine($"Overspec did not lead to deadend");
                 }
 
-                if (Options.OverSpecifyPreconds)
+                if (Options.OverspecifiedPreconditions)
                     ED.Add(res);
             }
 
@@ -158,7 +162,7 @@ public class Program
         {
             //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BL0, true));
             //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, true));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.FailHandler, true, 0, false, 0.0));
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.FailHandler, true, 5, true, 0.0));
         }
         else
         {
@@ -230,7 +234,7 @@ public class Program
 
     public static void TestAll(bool bOnline)
     {
-        //FFUtilities.Verbose = false;
+        //FFUtilities.Verbose = true;
         Options.Verbose = true;
 
         //for FP/FN usecases
@@ -241,7 +245,7 @@ public class Program
         gcmd_line.debug = 0;
         string sPath = @"C:\Users\travkaie\OneDrive - Intel Corporation\Documents\School\up-cpor\Tests\";
         //Options.SDR_OBS = true;
-        RunTest("unix1", bOnline, sPath);
+        //RunTest("unix1", bOnline, sPath);
         //RunTest("unix2", bOnline, sPath);
         //RunTest("unix4", bOnline, sPath);
         //RunTest("blocks3", bOnline, sPath);
@@ -250,7 +254,7 @@ public class Program
         //RunTest("doors9", bOnline, sPath);
         //RunTest("doors15", bOnline, sPath);
         //RunTest("doors13", bOnline, sPath);
-        //RunTest("wumpus10", bOnline, sPath);
+        RunTest("wumpus05", bOnline, sPath);
         //RunTest("colorballs2-2", bOnline, sPath);
         //RunTest("blocks3", bOnline, sPath);
 
