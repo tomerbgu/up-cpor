@@ -105,7 +105,7 @@ namespace CPORLib
                 double variance = sumOfSquaredDifferences / ED.Count;
                 Console.WriteLine($"Strategy: {info.Item3}\n");
                 Console.WriteLine($"Number of Successful iterations: {ED.Count}");
-                Console.WriteLine($"False Positives/Negatives: {Options.FalsePositive}");
+                Console.WriteLine($"False Positives/Negatives: {Options.PredicateInaccuracy}");
                 //Console.WriteLine($"Mode: {Options.InaccuracyHandlingStrategy}");
                 Console.WriteLine($"Average Time: {time.TotalMinutes:00}:{time.Seconds:00}.{time.Milliseconds:000}");
                 Console.WriteLine($"Average Actions: {ED.Average(obj => obj.Actions)}");
@@ -159,7 +159,7 @@ namespace CPORLib
             if (bOnline)
             {    
                 
-                if (Options.UseFakePreds)
+                if (Options.OverspecifiedPreconditions && Options.UseFakePreds)
                 {
                     domain.AddFakePredicates();
                 }

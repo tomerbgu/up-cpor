@@ -141,7 +141,7 @@ namespace RunCPOR
                 writer.WriteLine($"Domain/Problem: {ED[0].Domain.Name}/{ED[0].Problem.Name}\n");
                 writer.WriteLine($"Settings: {setting}\n");
                 writer.WriteLine($"Number of Successful iterations: {ED.Count}");
-                writer.WriteLine($"False Positives/Negatives: {Options.FalsePositive}");
+                writer.WriteLine($"False Positives/Negatives: {Options.PredicateInaccuracy}");
                 writer.WriteLine($"Mode: {Options.InaccuracyHandlingStrategy}");
                 writer.WriteLine($"Average Actions: {ED.Average(obj => obj.Actions)}");
                 writer.WriteLine($"\t std Actions: {Math.Sqrt(variance)}");

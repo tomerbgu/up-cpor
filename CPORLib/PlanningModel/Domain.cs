@@ -107,7 +107,7 @@ namespace CPORLib.PlanningModel
             m_lAlwaysKnown = new List<string>(d.m_lAlwaysKnown);
             Functions = new List<string>(d.Functions);
             TypeHierarchy = new Dictionary<string, string>(d.TypeHierarchy);
-            originalPreconditions = new Dictionary<string, Formula>();
+            originalPreconditions = new Dictionary<string, Formula>(d.originalPreconditions);
             removedPreconditions = new List<Tuple<ParametrizedAction, Formula, List<int>>>();
             alreadyAttemptedActions = Actions.Select((action, index) => new { action, index }).Where(ai => ai.action.Preconditions == null).Select(ai => ai.index).ToList();
             //resetPreconditions();
@@ -1816,7 +1816,7 @@ namespace CPORLib.PlanningModel
                     lTaggedPredicates.Add(pRemove);
                 }
 
-                if (!AlwaysKnown(pp))
+                if (!AlwaysKnown(pp) || IsUncertainty(pp))
                 {
                     Predicate pK = pp.Clone();
                     pK.Name = "K" + pp.Name;
@@ -3418,6 +3418,11 @@ namespace CPORLib.PlanningModel
             return m_lAlwaysKnown.Contains(p.Name);
         }
 
+        public bool IsUncertainty(Predicate p)
+        {
+            return Uncertainties.Select(obj => obj.Name).Contains(p.Name);
+        }
+
         public bool Observable(Predicate p)
         {
             return m_lObservable.Contains(p.Name);
@@ -4046,15 +4051,16 @@ namespace CPORLib.PlanningModel
             var actionsNotExhausted = combosNotTried.Where(entry => char.IsDigit(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0][entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0].Length - 1])).ToList(); //todo this is necessary somewhere if we dont filter normal actions
             var entryWithMaxValue1 = actionsNotExhausted.OrderBy(entry => entry.Value).Reverse().FirstOrDefault();
             string resultActionName1 = entryWithMaxValue1.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0];
-            if (Options.Verbose)
+            if (forStatsOnly)
             {
                 var forTieBreak = actionsNotExhausted.Where(entry => entry.Value == entryWithMaxValue1.Value).ToList();
                 Console.WriteLine($"There were {forTieBreak.Count}/{actionsNotExhausted.Count} actions with val {entryWithMaxValue1.Value}");
                 var distinctActions = forTieBreak.Select(entry => entry.Key.Name.Split('~')[0]).GroupBy(action => action).ToDictionary(group => group.Key, group => group.Count());
                 Console.WriteLine($"There were {distinctActions.Count} distinct action preconditions with val {entryWithMaxValue1.Value}");
                 Console.WriteLine(string.Join(Environment.NewLine, distinctActions.Select(kvp => $"{kvp.Key}: {kvp.Value}")));
-                Console.WriteLine($"--------{resultActionName1}--------");
             }
+            if (Options.Verbose)
+                Console.WriteLine($"--------{resultActionName1}--------");
             if (!forStatsOnly)
                 PreviouslyModifiedActions.Add(resultActionName1);
             int precondToRemove1 = (int)char.GetNumericValue(resultActionName1[resultActionName1.Length - 1]);

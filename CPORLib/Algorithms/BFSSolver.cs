@@ -108,7 +108,7 @@ namespace CPORLib.Algorithms
                 }
                 else
                 {
-                    sCurrent.RemoveObservedPreCond(a);
+                    sCurrent.RemoveObservedPreCond(a, out bool failFlag);
                     Console.WriteLine("Failed");
                 }
             }

@@ -46,7 +46,6 @@ public class Program
             Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double> setting = settings[j];
 
             Options.InaccuracyHandlingStrategy = setting.Item1;
-            //Options.FalsePositive = setting.Item2;
             Options.UseCosts = setting.Item2;
             Options.ActionCost = setting.Item3;
             Options.UseFakePreds = setting.Item4;
@@ -64,13 +63,8 @@ public class Program
                 SetRandomSeed(i, seeds, NoDeadends);
                 if (canOverride)
                 {
-                    Console.WriteLine("===================Overwriting random seed!!===================");
-                    //RandomGenerator.Init(353); //blocks 198 weirdDeadend, 353 real dead end?!?!?
-                    RandomGenerator.Init(598);
-
-                    //RandomGenerator.Init(730); //doors7 something weird with the door that is open
-                    //RandomGenerator.Init(673); //861 wumpus20 something weird with the stenches
-
+                    //Console.WriteLine("===================Overwriting random seed!!===================");
+                    //RandomGenerator.Init(755); //pessimistic fail only bugs - blocks 961
                     Console.WriteLine();
                 }
 
@@ -97,25 +91,24 @@ public class Program
                     //Console.WriteLine($"Timeout");
                     continue;
                 }
-                //ExecutionData res = Run.RunPlanner(sDomainFile, sProblemFile, sOutputFile, bOnline, NoDeadends, false);
-
                 if (res.FailCount > 0)
                 {
                     //Console.WriteLine($"Succeeded with {sdr.ExecutionData.FailCount} Fails");
                 }
-                if (res.ReplanningCount > 0)
-                {
-                    //Console.WriteLine($"Succeeded with {sdr.ExecutionData.ReplanningCount} deadends");
-                    ED.Add(res); //this is here bc it makes more sense for replanning
-                    Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
-                }
-                else
-                {
-                    Console.WriteLine($"Overspec did not lead to deadend");
-                }
-
-                if (Options.OverspecifiedPreconditions)
-                    ED.Add(res);
+                //if (res.ReplanningCount > 0)
+                //{
+                //    Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
+                //    //    ED.Add(res); //this is here bc it makes more sense for replanning
+                //    //Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
+                //}
+                //else
+                //{
+                //    Console.WriteLine($"Overspec did not lead to deadend");
+                //}
+                //if (Options.OverspecifiedPreconditions)
+                //    ED.Add(res);
+                ED.Add(res); //this is here bc it makes more sense for replanning
+                Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
             }
 
             foreach (var obj in ED)
@@ -134,6 +127,56 @@ public class Program
         }
         ExcelHelper.WriteToExcel(folderPath, ExecutionData, settings.Select(t => t.ToString()).ToList());
     }
+
+    private static void SetSettings(string sName, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>> settings)
+    {
+        if (sName.StartsWith("wumpus"))
+            Options.SDR_OBS = true;
+
+        settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, true, 0.2));
+        settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, true, 1, false, 0.2));
+        settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLPessimistic, true, 1, true, 0.2));
+        if (Options.PredicateInaccuracy!=PredicateInaccuracies.FalsePositive)
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, false, 0.2));
+
+        //mixes
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, false, 1, true, 0.0));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, false, 1, false, 0.0));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, true, 1, true, 0.0));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, true, 1, false, 0.0));
+
+
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BL0, false));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, false));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, false));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, false, 0.0));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, false, 0.0));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, false, 0.0));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, false, 0.0));
+
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.0));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.0));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.0));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.0));
+
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.2));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.2));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.2));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.2));
+
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.5));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.5));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.5));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.5));
+
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.8));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.8));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.8));
+        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.8));
+
+    }
+
 
     static async Task<ExecutionData> StartPlanner(string sDomainFile, string sProblemFile, string sOutputFile, bool bOnline, HashSet<int> NoDeadends, bool bValidate, CancellationToken cancellationToken)
     {
@@ -154,50 +197,6 @@ public class Program
 #pragma warning restore CS8603 // Possible null reference return.
     }
 
-    private static void SetSettings(string sName, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>> settings)
-    {
-        if (sName.StartsWith("wumpus"))
-            Options.SDR_OBS = true;
-        if (Options.FalsePositive)
-        {
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BL0, true));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, true));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.FailHandler, true, 5, true, 0.0));
-        }
-        else
-        {
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BL0, false));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, false));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, false));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, false, 0.0));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, false, 0.0));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, false, 0.0));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, false, 0.0));
-
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.0));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.0));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.0));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.0));
-
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.2));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.2));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.2));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.2));
-
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.5));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.5));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.5));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.5));
-
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, false, 0, true, 0.8));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 1, true, 0.8));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 5, true, 0.8));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.OverspecifiedPrecondition, true, 20, true, 0.8));
-
-        }
-
-    }
 
     private static void SetRandomSeed(int curr_i, List<int> seeds, HashSet<int> NoDeadEnds)
     {
@@ -238,32 +237,20 @@ public class Program
         Options.Verbose = true;
 
         //for FP/FN usecases
-        //Options.FalsePositive = false;
+
         //Options.threshold = 0;
 
         gcmd_line.display_info = 0;
         gcmd_line.debug = 0;
         string sPath = @"C:\Users\travkaie\OneDrive - Intel Corporation\Documents\School\up-cpor\Tests\";
         //Options.SDR_OBS = true;
-        //RunTest("unix1", bOnline, sPath);
-        //RunTest("unix2", bOnline, sPath);
-        //RunTest("unix4", bOnline, sPath);
-        //RunTest("blocks3", bOnline, sPath);
-        //RunTest("doors5", bOnline, sPath);
-        //RunTest("doors7", bOnline, sPath);
-        //RunTest("doors9", bOnline, sPath);
-        //RunTest("doors15", bOnline, sPath);
-        //RunTest("doors13", bOnline, sPath);
-        RunTest("wumpus05", bOnline, sPath);
-        //RunTest("colorballs2-2", bOnline, sPath);
-        //RunTest("blocks3", bOnline, sPath);
+        RunTest("unix1", bOnline, sPath);
+        RunTest("doors5", bOnline, sPath);
+        RunTest("colorballs2-2", bOnline, sPath);
+        RunTest("clog5", bOnline, sPath);
+        RunTest("blocks3", bOnline, sPath);
+        //RunTest("wumpus05", bOnline, sPath);
 
-        //RunTest("clog5", bOnline);
-        //RunTest("colorballs11-2", bOnline);
-        //RunTest("colorballs2-2", bOnline);
-
-        //RunTest("blocks3", bOnline);
-        //RunTest("unix3", bOnline);
 
 
         //RunTest("localize5", bOnline);

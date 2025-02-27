@@ -32,11 +32,11 @@ namespace CPORLib.Algorithms
             Options.ComputeCompletePlanTree = false;
             //Options.AddAllKnownToGiven = true; //this is needed in, e.g., medpks010
 
-            Problem = new Problem(problem); //modify this back to Problem fakeProb
+            Problem = new Problem(problem);
             Domain = Problem.Domain;
 
 
-            //this is part of experiment setup - overspecify preconditions in Planner
+            //this is part of experiment setup - over specify preconditions in Planner
             if (Options.OverspecifiedPreconditions)
             {
                 OverSpecifyPreconds();
@@ -48,35 +48,13 @@ namespace CPORLib.Algorithms
             //end part
 
             //this is part of our experiment setup for negating initial literals
-            PredicatesToNegate = new HashSet<Predicate>();
-            if (PredicatesToNegate.Count == 0)
-            {
-                foreach (Predicate p in problem.Known)
-                {
-                    if (p.Negation == Options.FalsePositive && domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name))
-                    {
-                        if (RandomGenerator.NextDouble() < Options.threshold)
-                        {
-                            PredicatesToNegate.Add(p);
-                        }
-                    }
-                }
-            }
-            
-            ExecutionData.NumberOfNegations = PredicatesToNegate.Count;
-            Console.WriteLine($"Num of negations: {ExecutionData.NumberOfNegations}");
-            foreach (Predicate p in PredicatesToNegate)
-            {
-                //Console.WriteLine("negated this: " + p.ToString());
-                Problem.Known.Remove(p);
-                Problem.AddKnown(p.Negate());
-            }
+            NegatePredicatesForSimulations(problem, domain);
             //end part
 
 
             BeliefState bsInitial = Problem.GetInitialBelief();
-            bool removeInaccuracies = (InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BL0 || InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BLOptimistic);
-            if (removeInaccuracies)
+            bool removeInaccuracies = (InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BLPessimistic || InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BLOptimistic);
+            if (Options.PredicateInaccuracy != Options.PredicateInaccuracies.Neither && removeInaccuracies)
                 bsInitial.ModifyProblemBeforeStateSelection(CurrentState);
             CurrentState = bsInitial.GetPartiallySpecifiedState();
             FutureActions = null;
@@ -84,9 +62,6 @@ namespace CPORLib.Algorithms
             ExpectingObservation = false;
 
             //this is  to make sure that if part of initial literals are incorrect, we still make sure we are in goal state to succeed. Not experimental
-            
-            //if (Problem.Goal is CompoundFormula cff) //only relevant for compound formulas?
-            //{
             ISet<Predicate> GoalPredicates = Problem.Goal.GetAllPredicates();
             CompoundFormula cf;
 
@@ -98,8 +73,6 @@ namespace CPORLib.Algorithms
                     CurrentState.Observed.Remove(curr);
                     CurrentState.Hidden.Add(curr);
 
-                    //break; //dont need to remove all to make it think something is wrong - unless goal is an or-formula
-
                     //todo should this be outside the if
                     cf = new CompoundFormula("or");
                     cf.SimpleAddOperand(curr);
@@ -109,8 +82,43 @@ namespace CPORLib.Algorithms
                 }
                 
             }
-            //}
+        }
 
+
+        private void NegatePredicatesForSimulations(Problem problem, Domain domain)
+        {
+            PredicatesToNegate = new HashSet<Predicate>();
+            if (PredicatesToNegate.Count == 0)
+            {
+                foreach (Predicate p in problem.Known)
+                {
+                    if (ValidToInjectInaccuracy(p) && domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name))
+                    {
+                        if (RandomGenerator.NextDouble() < Options.threshold)
+                        {
+                            PredicatesToNegate.Add(p);
+                        }
+                    }
+                }
+            }
+
+            ExecutionData.NumberOfNegations = PredicatesToNegate.Count;
+            Console.WriteLine($"Num of negations: {ExecutionData.NumberOfNegations}");
+            foreach (Predicate p in PredicatesToNegate)
+            {
+                //Console.WriteLine("negated this: " + p.ToString());
+                Problem.Known.Remove(p);
+                Problem.AddKnown(p.Negate());
+            }
+        }
+        
+        private bool ValidToInjectInaccuracy(Predicate p)
+        {
+            if (Options.PredicateInaccuracy == PredicateInaccuracies.Both)
+                return true;
+            if (Options.PredicateInaccuracy == PredicateInaccuracies.Neither)
+                return false;
+            return p.Negation == (Options.PredicateInaccuracy == PredicateInaccuracies.FalsePositive);
         }
 
         private void OverSpecifyPreconds()
@@ -139,72 +147,8 @@ namespace CPORLib.Algorithms
             }
             if (GoalReached)
             {
-                //if (CheckGoalReached)
-                //{
-                //    CheckGoalReached = false;
-                //    ISet<Predicate> GoalPredicates = Problem.Goal.GetAllPredicates();
-                //    CompoundFormula cf;
-
-                //    foreach (Predicate curr in GoalPredicates)
-                //    {
-                //        if (CurrentState.Observed.Contains(curr))
-                //        {
-                //            CurrentState.m_bsInitialBelief.Observed.Remove(curr);
-                //            CurrentState.Observed.Remove(curr);
-                //            CurrentState.Hidden.Add(curr);
-
-                //            //break; //dont need to remove all to make it think something is wrong - unless goal is an or-formula
-                //        }
-                //        cf = new CompoundFormula("or");
-                //        cf.SimpleAddOperand(curr);
-                //        cf.SimpleAddOperand(curr.Negate());
-                //        CurrentState.m_bsInitialBelief.AddHidden(cf);
-
-                //        //HashSet<int> hsModified = CurrentState.m_bsInitialBelief.ReviseInitialBelief(cf, CurrentState, true);
-                //        //if (hsModified.Count > 0)
-                //        //{
-                //        //    if (!Options.OptimizeMemoryConsumption)
-                //        //        CurrentState.PropogateObservedPredicates();
-                //        //}
-                //    }
-                    
-                    
-
-
-
-                //    //ISet<Predicate> GoalPredicates = Problem.Goal.GetAllPredicates();
-                //    //foreach (Predicate curr in GoalPredicates)
-                //    //{
-                //    //    if (CurrentState.Observed.Contains(curr))
-                //    //    {
-                //    //        CurrentState.m_bsInitialBelief.Observed.Remove(curr);
-                //    //        CurrentState.Observed.Remove(curr);
-                //    //        CurrentState.Hidden.Add(curr);
-
-                //    //        //break; //dont need to remove all to make it think something is wrong - unless goal is an or-formula
-                //    //    }
-                //    //}
-
-                //    //CompoundFormula cf = new CompoundFormula("or");
-                //    //cf.SimpleAddOperand(Problem.Goal);
-                //    //cf.SimpleAddOperand(Problem.Goal.Negate());
-                //    //CurrentState.m_bsInitialBelief.Hidden.Add(cf);
-
-                //    ////CurrentState.m_bsInitialBelief.Unknown.Add(Problem.pGoal.Canonical());
-                //    //if (Problem.pGoal != null)
-                //    //    CurrentState.m_bsInitialBelief.Unknown.Add(Problem.pGoal.Canonical());
-                //    //else
-                //    //{
-                //    //    //CompoundFormula cfg = ((CompoundFormula)(Problem.Goal)).RemoveNestedConjunction(out bool changed);
-                //    //    foreach (Predicate p in GoalPredicates)
-                //    //        CurrentState.m_bsInitialBelief.Unknown.Add(p.Canonical());
-                //    //}
-                //}
-                //else
-                //{
-                    Error = "Goal already reached, no additional actions should be executed.";
-                    return null;
-                //}
+                Error = "Goal already reached, no additional actions should be executed.";
+                return null;
 
             }
             bool bPreconditionFailure = false;

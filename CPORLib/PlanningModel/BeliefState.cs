@@ -179,8 +179,7 @@ namespace CPORLib.PlanningModel
 
         public bool ConsistentWith(Formula fOriginal, bool bCheckingActionPreconditions, ISet<Predicate> verified)
         {
-            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p =>
-                                        !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name) || verified.Contains(p)));
+            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p => !Problem.Domain.IsUncertainty(p) || verified.Contains(p)));
 
             Formula f = fOriginal.Reduce(filtered);
             if (f.IsFalse(filtered))
@@ -234,7 +233,7 @@ namespace CPORLib.PlanningModel
                             }
                         }
                     }
-                    if(bKnown && !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(gp.Name))
+                    if(bKnown && !Problem.Domain.IsUncertainty(gp))
                     {
                         if(!m_lObserved.Contains(gp) && !gp.Negation)
                         {
@@ -1267,7 +1266,7 @@ namespace CPORLib.PlanningModel
             return lAssignment;
         }
 
-
+        public bool isSim = false;
         private ISet<Predicate> GetHiddenPredicates(List<CompoundFormula> lHidden)
         {
             HashSet<Predicate> lAllPredicates = new HashSet<Predicate>();
@@ -1312,7 +1311,7 @@ namespace CPORLib.PlanningModel
                 if (!Problem.Domain.AlwaysKnown(p) && !lToAssign.Contains(p))
                     lToAssign.Add(p);
             foreach (Predicate p in lCanonicalPredicates)
-                if (!Problem.Domain.AlwaysKnown(p) && !lToAssign.Contains(p))
+                if ((!Problem.Domain.AlwaysKnown(p) && !lToAssign.Contains(p)) || (Problem.Domain.IsUncertainty(p) && !isSim))
                     lToAssign.Add(p);
             return lToAssign;
         }
@@ -1809,7 +1808,7 @@ namespace CPORLib.PlanningModel
 
         public void GetTaggedDomainAndProblem(PartiallySpecifiedState pssCurrent, List<Action> lAppliedActions, 
             Options.DeadendStrategies dsStrategy, bool bPreconditionFailure,
-            out int cTags, out Domain dTagged, out Problem pTagged, bool fakeDeadends, List<string> oldPlan
+            out int cTags, out Domain dTagged, out Problem pTagged, bool falseNegatives, List<string> oldPlan
             )
         {
             List<PlanningAction> lFakeActions = null;
@@ -1819,15 +1818,16 @@ namespace CPORLib.PlanningModel
             Problem oProb = null;
             HashSet<Predicate> origObserved = new HashSet<Predicate>();
             bool modifyGoal = oldPlan != null;
-            if (fakeDeadends || modifyGoal)
+            if (falseNegatives || modifyGoal)
             {
                 modifyDomainBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.MakeTrue && !modifyGoal;
-
+                original = Clone();
                 if (modifyDomainBeforeStateSelection)
                     lFakeActions = ModifyDomainBeforeStateSelection(true);
-                modifyProblemBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.Baseline;
+                modifyProblemBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.Lazy;
                 original = Clone();
-                oProb = new Problem(Problem);
+                oProb = Problem;
+                Problem = new Problem(Problem);
                 foreach (Predicate pred in Observed)
                 {
                     origObserved.Add(pred.Clone());
@@ -1868,7 +1868,7 @@ namespace CPORLib.PlanningModel
                 }
             }
             cTags = 0;
-            bool change = !fakeDeadends;
+            bool change = true;// todo why was this !falseNegatives;
             if (change)
             {
                 List<ISet<Predicate>> lChosen = ChooseStateSet();
@@ -1914,10 +1914,11 @@ namespace CPORLib.PlanningModel
             else
                 throw new NotImplementedException();
 
-            if (fakeDeadends)
+            if (falseNegatives)
             {
                 if (modifyProblemBeforeStateSelection)
                 {
+                    //i want to change back bc i'm assuming that even though there was a false negative most info is correct
                     Problem = oProb;
                     m_lHiddenFormulas = original.m_lHiddenFormulas;
                     m_lObserved = origObserved;
@@ -2056,7 +2057,7 @@ namespace CPORLib.PlanningModel
                             Problem.AddKnown(p.Canonical());
                         }
                     }
-                    else if ((pssCurrent==null && InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BL0) || (p.Negation && !uncertainVerified.Contains(p))) //pssCurrent is null only if we are at start
+                    else if ((pssCurrent==null && InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BLPessimistic) || (p.Negation && !uncertainVerified.Contains(p))) //pssCurrent is null only if we are at start
                     {
                         bool neg1 = Observed.Remove(p);
                         bool neg2 = Problem.Known.Remove(p);
@@ -2065,10 +2066,17 @@ namespace CPORLib.PlanningModel
                         {
                             Unknown.Add(p.Canonical());
                             Problem.Unknown.Add(p.Canonical());
+                            if (pssCurrent!=null)
+                                pssCurrent.m_bsInitialBelief.Unknown.Add(p.Canonical());
+                            //pssCurrent.Hidden.Add(p.Canonical());
+                            
                             CompoundFormula orHidden = new CompoundFormula("or");
                             orHidden.AddOperand(p);
                             orHidden.SimpleAddOperand(p.Negate());
                             m_lHiddenFormulas.Add(orHidden);
+                            //pssCurrent.m_bsInitialBelief.Hidden.Add(orHidden);
+
+
                         }
                     }
                 }
@@ -3410,7 +3418,7 @@ namespace CPORLib.PlanningModel
             }
 
             Formula fFinal = null;
-            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p => !Problem.Domain.Uncertainties.Select(obj => obj.Name).Contains(p.Name)));
+            ISet<Predicate> filtered = new HashSet<Predicate>(Observed.Where(p => !Problem.Domain.IsUncertainty(p)));
             if (lCurrentFormulas.Count == 0)
                 return hsModifiedClauses;
             if (lCurrentFormulas.Count == 1)
@@ -3451,7 +3459,10 @@ namespace CPORLib.PlanningModel
             {
                 //HashSet<Predicate> lLearned = pssCurrent.ApplyReasoning(); not needed since we got the learned predicates from the belief update
                 if (!Options.ComputeCompletePlanTree)
+                {
                     pssCurrent.AddObserved(lLearned);
+                    pssCurrent.AddVerified(lLearned); //learned from reasoning is also verified
+                }
                 dtAfterReasoning = DateTime.Now;
                 if (bTrueRegression)
                 {
@@ -3483,10 +3494,14 @@ namespace CPORLib.PlanningModel
                         {
                             pssCurrent = sTrace.Pop();
                             pssCurrent.AddObserved(lLearned);
+                            pssCurrent.AddVerified(lLearned); //learned from reasoning is also verified
                         }
                     }
                     else
+                    {
                         pssLast.AddObserved(lLearned);
+                        pssLast.AddVerified(lLearned); //learned from reasoning is also verified
+                    }
                 }
 
             }

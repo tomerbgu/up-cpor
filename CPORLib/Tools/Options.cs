@@ -14,11 +14,14 @@ namespace CPORLib.Tools
 
         public static DeadendStrategies DeadendStrategy = DeadendStrategies.Lazy;
 
-        public enum InaccuracyHandlingStrategies { FailHandler, Baseline, MakeTrue, BL0, BLOptimistic};
-        public static InaccuracyHandlingStrategies InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.FailHandler;
-        public static bool FalsePositive = true; //false creates deadends. true creates failures
+        //Pessimistic -> change each possible uncertainty as unknown
+        //Pessimistic -> change each possible uncertainty as true
+        public enum InaccuracyHandlingStrategies { BLPessimistic, BLOptimistic, Lazy, MakeTrue };
+        public static InaccuracyHandlingStrategies InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.Lazy;
+        public enum PredicateInaccuracies { FalsePositive, FalseNegative, Both, Neither }
+        public static PredicateInaccuracies PredicateInaccuracy = PredicateInaccuracies.FalsePositive; //false creates deadends. true creates failures
 
-        public static bool OverspecifiedPreconditions = true;
+        public static bool OverspecifiedPreconditions = false;
         public static bool AllowMultipleOverSpecifications = false;
         public static bool FixOneAtATime = true; //for overspecified preconditions
         public static bool UseCosts = true;

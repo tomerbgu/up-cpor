@@ -3928,7 +3928,7 @@ namespace CPORLib.PlanningModel
                 throw new Exception("Precondition doesn not exist in this action");
             if (Preconditions is CompoundFormula)
             {
-                ((CompoundFormula)Preconditions).Operands.RemoveAll(f => f.ToString() == predName);
+                ((CompoundFormula)Preconditions).Operands.RemoveAll(f => f.ToString().Equals(predName));
             }
             else
             {

@@ -13,6 +13,8 @@ using System.Text;
 using static CPORLib.Tools.Options;
 using Action = CPORLib.PlanningModel.PlanningAction;
 using static Microsoft.SolverFoundation.Solvers.SerializationStatus;
+using System.Numerics;
+
 
 #if PYTHONNET
 using Python.Runtime;
@@ -470,21 +472,17 @@ namespace CPORLib.Algorithms
                 }
             }
 
-            //this is in cases where a previously executed action is identified as problematic --TODO prove relevancy
-            //if (pssCurrent.problemAction!=null)
-            //    Domain.SelectAndRemoveActionPreconditionRandom(pssCurrent);
             pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, bPreconditionFailure, out int cTags, out Domain dTagged, out Problem pTagged, false, null);
 
-            //var forDebug  = pTagged.Known.Where(x=>x.Name.Contains("file-in-dir")).ToList();
             if (!WriteAllKVariations || cTags == 1)
             {
                 bool deadend = false;
                 try
                 {
                     ExecutionData.Planning++;
-                    
+
                     lPlan = RunPlanner(dTagged, pTagged, -1);
-                    if (lPlan.Count()==0)
+                    if (lPlan.Count() == 0)
                     {
                         deadend = true;
                         throw new DeadendException("weirdDeadEnd");
@@ -493,8 +491,11 @@ namespace CPORLib.Algorithms
                 catch (DeadendException e)
                 {
                     if (Options.Verbose)
+                    {
+                        Console.WriteLine("------------");
                         Console.WriteLine(e.Message);
-                    //if (!Options.FalsePositive)
+                    }
+
                     deadend = true;
                 }
                 if (deadend)
@@ -502,124 +503,19 @@ namespace CPORLib.Algorithms
                     int ctags;
                     Domain dTaggedDE = null;
                     Problem pTaggedDE = null;
-                    if (Options.OverspecifiedPreconditions)
+
+                    //first try and see if there is a way to do it without modifying actions
+                    try
                     {
-                        bool first = true; //helpful for debug
-                        //get fully expanded forward search state
-                        PartiallySpecifiedState expandedState = null;
-                        while (lPlan == null || lPlan.Count==0) //TODO make sure you dont get stuck in infinite loop
-                        {
-                            //for each action check if only one preconditions does not hold
-                            if (Options.UseCosts)
-                            {
-                                bool trackStats = false;
-                                if (trackStats)
-                                {
-                                    expandedState = forwardExpansion(pssCurrent);
-                                    Domain.GetRelaxedActionsByPriority(expandedState, trackStats);
-                                }
-                                Predicate NoOverSpecifications = new GroundedPredicate("NoOverSpecifications");
-                                Domain.AddNoOverSpecifications(NoOverSpecifications);
-                            }
-                            else if (expandedState == null)
-                            {
-                                //Console.WriteLine("FE");
-                                //DateTime dtStart = DateTime.Now;
-                                expandedState = forwardExpansion(pssCurrent);
-                                //DateTime dtEnd = DateTime.Now;
-                                //TimeSpan diff = dtEnd - dtStart;
-                                //Console.WriteLine("FE Finished " + diff.TotalSeconds + " seconds");
-
-                                //expandedState = forwardExpansionOld(pssCurrent);
-                            }
-                            //pssCurrent.AddObserved(NoOverSpecifications);
-                            //pssCurrent.m_bsInitialBelief.AddObserved(NoOverSpecifications);
-                            //pssCurrent.Problem.AddKnown(NoOverSpecifications);
-                            //Problem.AddKnown(NoOverSpecifications);
-
-                            List<PlanningAction> newActions = Domain.GetRelaxedActionsByPriority(expandedState);
-                            List<PlanningAction> oldActions = Domain.Actions;
-                            //todo you can also create clone of domain
-                            Domain.Actions = newActions;
-                            Domain.ComputeAlwaysKnown();
-
-                            if (Options.Verbose) 
-                                Console.WriteLine("Modified Actions");
-
-                            pssCurrent.m_bsInitialBelief.Problem.Domain = Domain;
-                            pssCurrent.Problem.Domain = Domain;
-                            pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out ctags, out dTaggedDE, out pTaggedDE, false, null);
-                            //debug modes
-                            bool testing = false;
-                            if (testing)
-                            {
-                                List<Action> lActions = Domain.GroundAllActions(pssCurrent.Observed, false);
-                                Console.WriteLine("\nAvailable actions:");
-                                for (int i = 0; i < lActions.Count; i++)
-                                {
-                                    Action ac = lActions[i];
-                                    if (ac.Preconditions == null || ac.Preconditions.IsTrue(pssCurrent.Observed, false))
-                                        Console.WriteLine(i + ") " + ac.Name);
-                                }
-                            }
-                            bool manual = false;
-                            if (manual)
-                            {
-                                ManualSolve(Domain, Problem, pssCurrent);
-                            }
-                            try
-                            {
-                                ExecutionData.ReplanningCount++;
-                                lPlan = RunPlanner(dTaggedDE, pTaggedDE, -1);
-                                if (Options.UseCosts)
-                                {
-                                    Domain.Actions = oldActions;
-                                    Domain.RemoveInjectedActionsAndPredicates(lPlan);
-                                    Domain.ComputeAlwaysKnown();
-                                    
-                                }
-                            }
-                            catch (DeadendException e)
-                            {
-                                if (Options.UseCosts)
-                                {
-                                    Domain.RemoveInjectedActionsAndPredicates(lPlan);
-                                }
-                                else
-                                {
-                                    Domain.Actions = oldActions;
-                                    Domain.ComputeAlwaysKnown();
-                                }
-                                first = false;
-                            }
-                        }
+                        if (Options.PredicateInaccuracy == PredicateInaccuracies.FalseNegative || Options.PredicateInaccuracy == PredicateInaccuracies.Both)
+                            SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                        else if (Options.OverspecifiedPreconditions)
+                            SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
                     }
-                    else
+                    catch (Exception ex) when (ex is OverspecifiedPreconditionException || ex is DeadendException)
                     {
-                        pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out ctags, out dTaggedDE, out pTaggedDE, true, null);
-                        RemoveInjectedPredicates();
-
-                        ExecutionData.ReplanningCount++;
-                        lPlan = RunPlanner(dTaggedDE, pTaggedDE, -1);
-                    }
-
-                    if (lPlan == null)
-                    {
-                        Debug.WriteLine("Classical Planner Failed to find solution after deadend");
-                        throw new Exception();
-                    }
-                    
-                    int makeActions = lPlan.Count(s => s.StartsWith("Make:"));
-                    ExecutionData.MakeActions.Add(makeActions);
-                    if (Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.MakeTrue && makeActions > 0)
-                    {
-                        pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out ctags, out Domain dTaggedModified, out Problem pTaggedModified, false, lPlan);
-                        ExecutionData.ReplanningIncludeModCount++;
-                        lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
-                        foreach (Predicate p in Problem.Domain.Uncertainties)
-                        {
-                            Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
-                        }
+                        if (Options.OverspecifiedPreconditions)
+                            SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
                     }
                 }
                 if (lPlan == null)
@@ -629,17 +525,152 @@ namespace CPORLib.Algorithms
                 }
 
             }
-            
 
             return lPlan;
         }
 
-        private bool checkRelaxedFeasibility(Problem p)
+        private void SolveByChangingFalseNegatives(out List<string> lPlan, PartiallySpecifiedState pssCurrent, Domain dTaggedDE, Problem pTaggedDE)
         {
-            Domain RelaxedDomain = Domain.RelaxAll();
-            ForwardSearchPlanner fsp = new ForwardSearchPlanner(RelaxedDomain, p);
-            List<string> stringList = fsp.Plan(new State(p));
-            return stringList != null;
+            pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out int ctags, out dTaggedDE, out pTaggedDE, true, null);
+            RemoveInjectedPredicates();
+            ExecutionData.ReplanningCount++;
+
+            lPlan = RunPlanner(dTaggedDE, pTaggedDE, -1);
+
+            if (lPlan == null || lPlan.Count() == 0)
+            {
+                Debug.WriteLine("Classical Planner Failed to find solution after deadend");
+                throw new OverspecifiedPreconditionException("Failed to solve problem  (Deadend) even after modifying initial predicated to account for false negatives.");
+            }
+
+            int makeActions = lPlan.Count(s => s.StartsWith("Make:"));
+            ExecutionData.MakeActions.Add(makeActions);
+            if (Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.MakeTrue)
+            {
+                if (makeActions > 0)
+                {
+                    pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out ctags, out Domain dTaggedModified, out Problem pTaggedModified, false, lPlan);
+                    ExecutionData.ReplanningIncludeModCount++;
+                    lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
+                }
+
+                foreach (Predicate p in Problem.Domain.Uncertainties)
+                {
+                    Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
+                    pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
+                }
+            }
+        }
+
+        private void SolveByRemovingPrecondition(out List<string> lPlan, PartiallySpecifiedState pssCurrent, Domain dTaggedDE, Problem pTaggedDE)
+        {
+            bool first = true; //helpful for debug
+            lPlan = null;
+            PartiallySpecifiedState expandedState = null;
+            while (lPlan == null || lPlan.Count == 0) //TODO make sure you dont get stuck in infinite loop
+            {
+                //for each action check if only one preconditions does not hold
+                if (Options.UseCosts)
+                {
+                    bool trackStats = false;
+                    if (trackStats)
+                    {
+                        expandedState = forwardExpansion(pssCurrent);
+                        Domain.GetRelaxedActionsByPriority(expandedState, trackStats);
+                    }
+                    Predicate NoOverSpecifications = new GroundedPredicate("NoOverSpecifications");
+                    Domain.AddNoOverSpecifications(NoOverSpecifications);
+                }
+                else if (expandedState == null)
+                {
+                    //Console.WriteLine("FE");
+                    //DateTime dtStart = DateTime.Now;
+                    expandedState = forwardExpansion(pssCurrent);
+                    //DateTime dtEnd = DateTime.Now;
+                    //TimeSpan diff = dtEnd - dtStart;
+                    //Console.WriteLine("FE Finished " + diff.TotalSeconds + " seconds");
+
+                    //expandedState = forwardExpansionOld(pssCurrent);
+                }
+                List<PlanningAction> newActions = Domain.GetRelaxedActionsByPriority(expandedState);
+                List<PlanningAction> oldActions = Domain.Actions;
+
+                Domain.Actions = newActions;
+                Domain.ComputeAlwaysKnown();
+
+                if (Options.Verbose)
+                    Console.WriteLine("Modified Actions");
+
+                pssCurrent.m_bsInitialBelief.Problem.Domain = Domain;
+                pssCurrent.Problem.Domain = Domain;
+                pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out int ctags, out dTaggedDE, out pTaggedDE, false, null);
+                
+                //debug modes
+                bool testing = false;
+                if (testing)
+                {
+                    List<Action> lActions = Domain.GroundAllActions(pssCurrent.Observed, false);
+                    Console.WriteLine("\nAvailable actions:");
+                    for (int i = 0; i < lActions.Count; i++)
+                    {
+                        Action ac = lActions[i];
+                        if (ac.Preconditions == null || ac.Preconditions.IsTrue(pssCurrent.Observed, false))
+                            Console.WriteLine(i + ") " + ac.Name);
+                    }
+                }
+                bool manual = false;
+                if (manual)
+                {
+                    ManualSolve(Domain, Problem, pssCurrent);
+                }
+                try
+                {
+                    ExecutionData.ReplanningCount++;
+                    lPlan = RunPlanner(dTaggedDE, pTaggedDE, -1);
+                    if (lPlan == null || lPlan.Count == 0)
+                        throw new DeadendException("Deadend");
+
+                    if (Options.UseCosts)
+                    {
+                        RemovePreconditionAttemptPostprocess(lPlan, pssCurrent, oldActions);
+                        //Domain.Actions = oldActions;
+                        //Domain.RemoveInjectedActionsAndPredicates(lPlan);
+                        //Domain.ComputeAlwaysKnown();
+                    }
+                }
+                catch (DeadendException e)
+                {
+                    try
+                    {
+                        //if removing a precond didnt work try seeing if it is affected by FN
+                        if (Options.PredicateInaccuracy==PredicateInaccuracies.FalseNegative || Options.PredicateInaccuracy==PredicateInaccuracies.Both)
+                            SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                        //if (lPlan==null || lPlan.Count == 0)
+                        RemovePreconditionAttemptPostprocess(lPlan, pssCurrent, oldActions);
+                    }
+                    catch (Exception ex) when (ex is OverspecifiedPreconditionException || ex is DeadendException)
+                    {
+                        RemovePreconditionAttemptPostprocess(lPlan, pssCurrent, oldActions);
+                        first = false;
+                    }
+                    
+                }            
+            }
+        }
+
+        private void RemovePreconditionAttemptPostprocess(List<string> lPlan, PartiallySpecifiedState pssCurrent, List<PlanningAction> oldActions)
+        {
+            if (Options.UseCosts)
+            {
+                Domain.Actions = oldActions;
+                Domain.RemoveInjectedActionsAndPredicates(lPlan);
+                Domain.ComputeAlwaysKnown();
+            }
+            if (!Options.UseCosts && (lPlan == null || lPlan.Count == 0))
+            {
+                Domain.Actions = oldActions;
+                Domain.ComputeAlwaysKnown();
+            }
         }
 
         private void RemoveInjectedPredicates()
@@ -647,6 +678,7 @@ namespace CPORLib.Algorithms
             foreach (Predicate p in Problem.Domain.Uncertainties)
             {
                 Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
+                //pssCurrent.Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
             }
             List<PlanningAction> actionsToRemove = new List<PlanningAction>();
             foreach (PlanningAction pa in Problem.Domain.Actions)
