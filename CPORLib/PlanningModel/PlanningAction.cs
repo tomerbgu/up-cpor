@@ -3936,5 +3936,20 @@ namespace CPORLib.PlanningModel
             }
 
         }
+        internal void RemovePrecondition(int predNum)
+        {
+            if (Preconditions == null)
+                throw new Exception("Precondition doesn not exist in this action");
+            if (Preconditions is CompoundFormula)
+            {
+                ((CompoundFormula)Preconditions).Operands.RemoveAt(predNum);
+            }
+            else if (predNum == 0)
+            {
+                Preconditions = null;
+            }
+            else
+                throw new Exception("Precondition doesn not exist in this action");
+        }
     }
 }

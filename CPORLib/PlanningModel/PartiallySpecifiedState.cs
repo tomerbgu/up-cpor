@@ -541,6 +541,33 @@ namespace CPORLib.PlanningModel
             return AddToObservedList(p);
         }
 
+        public void RemoveObservedPredicate(Predicate p)
+        {
+            Predicate pCanonical = (GroundedPredicate)p.Canonical();
+
+            m_bsInitialBelief.Observed.Remove(p);
+            Observed.Remove(p);
+            Problem.Known.Remove(p);
+            Hidden.Add(pCanonical);
+
+            PartiallySpecifiedState pss = this;
+            while (pss.Predecessor != null)
+            {
+                pss = pss.Predecessor;
+                pss.m_bsInitialBelief.Observed.Remove(p);
+                pss.m_bsInitialBelief.Problem.RemoveKnown(p);
+                pss.Observed.Remove(p);
+                pss.Problem.Known.Remove(p);
+                pss.Hidden.Add(pCanonical);
+            }
+
+            m_bsInitialBelief.Unknown.Add(pCanonical);
+
+            if (!m_bsInitialBelief.Unknown.Contains(pCanonical))
+                m_bsInitialBelief.Unknown.Add(pCanonical);
+
+        }
+
         public Formula RemoveObservedPreCond(Action a, out bool failFlag)
         {
             if (a.Preconditions == null)
@@ -553,13 +580,12 @@ namespace CPORLib.PlanningModel
             Formula toRegress = a.Preconditions.Negate();
             ISet<Predicate> verified = new GenericArraySet<Predicate>();
             var filteredPred = pred.Where(p => Problem.Domain.IsUncertainty(p));
-            GroundedPredicate pCanonical;
             bool allVerified = true;
             string[] actionName = Utilities.SplitString(a.Name, Utilities.DELIMITER_CHAR[0]);
             Formula originalPrecond = Problem.Domain.originalPreconditions[actionName[0]];
             Action aLifted = Problem.Domain.GetActionByName(actionName[0]);
             Action aReal = Problem.Domain.GroundActionByNamePrecond(actionName, originalPrecond);
-            if (!aLifted.Preconditions.Equals(originalPrecond))
+            if (aLifted.Preconditions!=null && !aLifted.Preconditions.Equals(originalPrecond))
             {
                 //if only the removed pred is not true, restore precond
                 //todo make sure this matches mixes of uncertainties in init domain (FN/FP)
@@ -611,22 +637,8 @@ namespace CPORLib.PlanningModel
                     continue;
                 }
                 allVerified = false;
-                
-                m_bsInitialBelief.Observed.Remove(p);
-                Observed.Remove(p);
-                Problem.Known.Remove(p);
-                Hidden.Add(p);
 
-                //CompoundFormula cfff = new CompoundFormula("or");
-                //cfff.AddOperand(p);
-                //cfff.SimpleAddOperand(p.Negate());
-                //m_bsInitialBelief.ReviseInitialBelief(cfff, this, true);
-
-                m_bsInitialBelief.Unknown.Add(p.Canonical());
-
-                pCanonical = (GroundedPredicate)p.Canonical();
-                if (!m_bsInitialBelief.Unknown.Contains(pCanonical))
-                    m_bsInitialBelief.Unknown.Add(pCanonical);
+                RemoveObservedPredicate(p);
             }
             if (allVerified)
             {
@@ -671,20 +683,14 @@ namespace CPORLib.PlanningModel
 
             CompoundFormula cff = new CompoundFormula("or");
             cff.AddOperand(toRegress);
-            //CompoundFormula res = new CompoundFormula("and");
-            //res.AddOperand(cff);
-            //foreach (Predicate p in cff.GetAllPredicates())
-            //{
-            //    CompoundFormula or = new CompoundFormula("or");
-            //    or.AddOperand(p);
-            //    or.SimpleAddOperand(p.Negate());
-            //    res.AddOperand(or);
-            //}
+
             //TODO TOMER WHY WAS THIS NECESSARY - RUN REGRESSION TESTS
             if (!failFlag)
                 cff.SimpleAddOperand(toRegress.Negate().Simplify());
 
             m_bsInitialBelief.ReviseInitialBelief(cff, this, true);
+
+            
 
             a.PreconditionsVerified = true;
             return cff;
@@ -753,6 +759,54 @@ namespace CPORLib.PlanningModel
                 {
                     //do nothing here - not adding formulas currently, only certainties
                     //throw new NotImplementedException();
+                    //foreach (Formula fSub in cf.Operands)
+                    //    hsNew.UnionWith(AddUncertainty(fSub));
+                }
+            }
+            return hsNew;
+        }
+
+        public bool AddUncertainty(Predicate p)
+        {
+            Predicate pNegate = p.Negate();
+            if (m_lObserved.Contains(pNegate))
+                m_lObserved.Remove(pNegate);
+            //m_lObserved.Add(p);
+
+            //if (p.Negation)
+            //    p = pNegate;
+            Predicate pCanonical = p.Canonical();
+            if (!m_lHidden.Contains(pCanonical))
+                m_lHidden.Add(pCanonical);
+
+            return true;
+        }
+
+        public HashSet<Predicate> AddUncertainty(Formula f)
+        {
+
+            HashSet<Predicate> hsNew = new HashSet<Predicate>();
+            if (f is PredicateFormula)
+            {
+                Predicate p = ((PredicateFormula)f).Predicate;
+
+                if (AddUncertainty(p))
+                {
+                    hsNew.Add(p);
+                }
+            }
+            else
+            {
+                CompoundFormula cf = (CompoundFormula)f;
+                if (cf.Operator == "and")
+                    foreach (Formula fSub in cf.Operands)
+                        hsNew.UnionWith(AddUncertainty(fSub));
+                else
+                {
+                    //do nothing here - not adding formulas currently, only certainties
+                    //throw new NotImplementedException();
+                    foreach (Formula fSub in cf.Operands)
+                        hsNew.UnionWith(AddUncertainty(fSub));
                 }
             }
             return hsNew;
@@ -1727,7 +1781,7 @@ namespace CPORLib.PlanningModel
 
 
                 Formula knewKnowledge = bsNew2.RemoveObservedPreCond(aOrg, out bool failFlag);
-                if (knewKnowledge == null || (failFlag && knewKnowledge.IsTrue(Observed))) //if a precondition was wrongfully removed
+                if (Options.OverspecifiedPreconditions && (knewKnowledge == null || (failFlag && knewKnowledge.IsTrue(Observed)))) //if a precondition was wrongfully removed
                     Problem.Domain.RestorePrecondition(aOrg);
                 else
                 {
@@ -2425,7 +2479,7 @@ namespace CPORLib.PlanningModel
         }
 
         public void GetTaggedDomainAndProblem(Options.DeadendStrategies dsStrategy, bool bPreconditionFailure, out int cTags,
-            out Domain dTagged, out Problem pTagged, bool falseNegatives, List<string> newGoal)
+            out Domain dTagged, out Problem pTagged, bool falseNegatives, List<string> newGoal, bool changeState = true)
         {
             List<Action> lActions = new List<PlanningAction>();
             PartiallySpecifiedState pssCurrent = this;
@@ -2435,7 +2489,7 @@ namespace CPORLib.PlanningModel
                     lActions.Insert(0, pssCurrent.GeneratingAction);
                 pssCurrent = pssCurrent.m_sPredecessor;
             }
-            m_bsInitialBelief.GetTaggedDomainAndProblem(this, lActions, dsStrategy, bPreconditionFailure, out cTags, out dTagged, out pTagged, falseNegatives, newGoal);
+            m_bsInitialBelief.GetTaggedDomainAndProblem(this, lActions, dsStrategy, bPreconditionFailure, out cTags, out dTagged, out pTagged, falseNegatives, newGoal, changeState);
         }
 
         private State WriteTaggedDomainAndProblemDeadEnd(List<Action> lActions, List<Formula> lMaybeDeadends, DeadendStrategies dsStrategy, bool bPreconditionFailure, out int cTags, out MemoryStream msModels)

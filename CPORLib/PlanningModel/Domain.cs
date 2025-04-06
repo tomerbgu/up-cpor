@@ -39,7 +39,7 @@ namespace CPORLib.PlanningModel
         private List<Tuple<ParametrizedAction, Formula, List<int>>> removedPreconditions;
         private List<int> alreadyAttemptedActions;
         public Dictionary<string, Formula> originalPreconditions { get; private set; }//action name -> preconditions
-        HashSet<string> PreviouslyModifiedActions;
+        public HashSet<string> PreviouslyModifiedActions;
 
         public Domain(string sName)
         {
@@ -66,10 +66,10 @@ namespace CPORLib.PlanningModel
             originalPreconditions = new Dictionary<string, Formula>();
         }
 
-         public Domain(Domain d)
+        public Domain(Domain d)
         {
             Name = d.Name;
-            
+
             m_lAlwaysKnown = new List<string>();
             m_lAlwaysConstant = new List<string>();
             m_lObservable = new List<string>();
@@ -115,7 +115,7 @@ namespace CPORLib.PlanningModel
             FakePredicates = d.FakePredicates;
             ComputeAlwaysKnown();
         }
-        
+
 
         #region accessors for unified_planning 
 
@@ -384,7 +384,7 @@ namespace CPORLib.PlanningModel
             List<PlanningAction> lAllActions = GetAllKnowledgeActions(dTags);
             foreach (PlanningAction a in lAllActions)
                 dTagged.AddAction(a);
-           
+
 
             List<PlanningAction> lReasoningActions = CreateReasoningActions(dTags, pCurrent, lDeadends);
             foreach (PlanningAction a in lReasoningActions)
@@ -670,9 +670,9 @@ namespace CPORLib.PlanningModel
             sw.WriteLine(")");
              * */
 
-    }
+        }
 
-    public void WriteKnowledgePredicate(StreamWriter sw, Predicate p)
+        public void WriteKnowledgePredicate(StreamWriter sw, Predicate p)
         {
             if (!AlwaysKnown(p))
                 sw.Write(Predicate.GenerateKnowPredicate(p).ToString());
@@ -963,11 +963,11 @@ namespace CPORLib.PlanningModel
             List<PlanningAction> lActions = new List<PlanningAction>();
             foreach (Predicate p in Uncertainties)
             {
-                ParametrizedAction a = new ParametrizedAction("Make:"+p.Name);
+                ParametrizedAction a = new ParametrizedAction("Make:" + p.Name);
                 if (p is ParametrizedPredicate)
                 {
                     ParametrizedPredicate pp = (ParametrizedPredicate)p;
-                    foreach(Parameter par in pp.Parameters)
+                    foreach (Parameter par in pp.Parameters)
                     {
                         a.AddParameter(par);
                     }
@@ -2829,7 +2829,7 @@ namespace CPORLib.PlanningModel
                 foreach (PlanningAction a in lGrounded)
                 {
                     //if (a.Effects==null || !pss.ConsistentWith(a.Effects, false)) //problematic in blocks domain.
-                        lAllGrounded.Add(a);
+                    lAllGrounded.Add(a);
                     //else
                     //    lAllGrounded.Add(a);
                 }
@@ -3888,7 +3888,7 @@ namespace CPORLib.PlanningModel
             if (Name == "wumpus")
             {
                 //these are the only actions in wumpus that will lead to deadend
-                HashSet<string> viable = new HashSet<string> { "move" , "grab" };
+                HashSet<string> viable = new HashSet<string> { "move", "grab" };
                 while (!viable.Contains(Actions[actionToOverSpecify].Name))
                     actionToOverSpecify = (actionToOverSpecify + 1) % Actions.Count;
             }
@@ -3916,7 +3916,7 @@ namespace CPORLib.PlanningModel
                 ParametrizedPredicate predToAdd = null;
                 ParametrizedAction aPar = (ParametrizedAction)a;
                 int randomIndex = -1;
-                for (int pIndex=0; pIndex < Predicates.Count; pIndex++)
+                for (int pIndex = 0; pIndex < Predicates.Count; pIndex++)
                 {
                     if (Options.UseFakePreds && Options.NumFakePreds == 1)
                     {
@@ -3938,13 +3938,13 @@ namespace CPORLib.PlanningModel
                         }
                         predToAdd = (ParametrizedPredicate)Predicates[randomIndex].Clone();
                     }
-                    
+
                     for (int i = 0; i < predToAdd.Parameters.Count(); i++)
                     {
                         bool replaceParam = true;
                         while (replaceParam)
                         {
-                            var paramsFiltered = aPar.Parameters.Where(p => p.Type == predToAdd.GetParameterType(i) && (i==0 || p!=predToAdd.Parameters.ElementAt(i-1)));
+                            var paramsFiltered = aPar.Parameters.Where(p => p.Type == predToAdd.GetParameterType(i) && (i == 0 || p != predToAdd.Parameters.ElementAt(i - 1)));
                             int parametersOfType = paramsFiltered.Count();
                             if (parametersOfType == 0)
                             {
@@ -3982,12 +3982,13 @@ namespace CPORLib.PlanningModel
             return fakePredicates;
         }
 
-        public List<PlanningAction> GetRelaxedActionsByPriority(PartiallySpecifiedState pss, bool forStatsOnly=false)
+        public List<PlanningAction> GetRelaxedActionsByPriority(PartiallySpecifiedState pss, out string modifiedAction, bool forStatsOnly = false)
         {
             //sort by number/percent of preconditions that are feasible, remove only preconditions that are not feasible
             Dictionary<PlanningAction, float> actionDictionary = new Dictionary<PlanningAction, float>();
             Dictionary<Formula, bool> preconditionCache = new Dictionary<Formula, bool>();
             var relaxedActionsList = GetAllRelaxedActions(pss, forStatsOnly);
+            modifiedAction = null;
             if (!forStatsOnly && Options.UseCosts)
                 return relaxedActionsList.ToList();
             foreach (PlanningAction a in relaxedActionsList)
@@ -4033,7 +4034,7 @@ namespace CPORLib.PlanningModel
                 }
             }
             if (Options.FixOneAtATime)
-                return GetRelevantActionModificationsOneAtATime(actionDictionary, forStatsOnly);
+                return GetRelevantActionModificationsOneAtATime(actionDictionary, out modifiedAction, forStatsOnly);
             else
                 return GetRelevantActionModifications(actionDictionary);
         }
@@ -4043,14 +4044,20 @@ namespace CPORLib.PlanningModel
             return actionNameDirty.Substring(0, actionNameDirty.Length - 1);
         }
 
-        private List<PlanningAction> GetRelevantActionModificationsOneAtATime(Dictionary<PlanningAction, float> precondStatistics, bool forStatsOnly = false)
+        private string getActionNameFromArray(string name)
         {
+            return name.Split(Utilities.DELIMITER_CHAR[0])[0];
+        }
+        private List<PlanningAction> GetRelevantActionModificationsOneAtATime(Dictionary<PlanningAction, float> precondStatistics, out string modifiedAction, bool forStatsOnly = false)
+        {
+            modifiedAction = null;
             List<PlanningAction> selectedActions = new List<PlanningAction>();
             PlanningAction aTag;
             var combosNotTried = precondStatistics.Where(entry => !PreviouslyModifiedActions.Contains(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0])).ToList();
-            var actionsNotExhausted = combosNotTried.Where(entry => char.IsDigit(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0][entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0].Length - 1])).ToList(); //todo this is necessary somewhere if we dont filter normal actions
+            var actionsNotExhausted = combosNotTried.Where(entry => GetActionByName(getActionNameFromArray(entry.Key.Name)).Preconditions==null || char.IsDigit(getActionNameFromArray(entry.Key.Name)[getActionNameFromArray(entry.Key.Name).Length - 1])).ToList(); //todo this is necessary somewhere if we dont filter normal actions
             var entryWithMaxValue1 = actionsNotExhausted.OrderBy(entry => entry.Value).Reverse().FirstOrDefault();
             string resultActionName1 = entryWithMaxValue1.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0];
+
             if (forStatsOnly)
             {
                 var forTieBreak = actionsNotExhausted.Where(entry => entry.Value == entryWithMaxValue1.Value).ToList();
@@ -4059,10 +4066,13 @@ namespace CPORLib.PlanningModel
                 Console.WriteLine($"There were {distinctActions.Count} distinct action preconditions with val {entryWithMaxValue1.Value}");
                 Console.WriteLine(string.Join(Environment.NewLine, distinctActions.Select(kvp => $"{kvp.Key}: {kvp.Value}")));
             }
-            if (Options.Verbose)
-                Console.WriteLine($"--------{resultActionName1}--------");
+            //if (Options.Verbose)
+            //    Console.WriteLine($"--------{resultActionName1}--------");
             if (!forStatsOnly)
+            {
                 PreviouslyModifiedActions.Add(resultActionName1);
+                modifiedAction = resultActionName1;
+            }
             int precondToRemove1 = (int)char.GetNumericValue(resultActionName1[resultActionName1.Length - 1]);
             foreach (PlanningAction a in Actions)
             {
@@ -4483,13 +4493,13 @@ namespace CPORLib.PlanningModel
             //action.PreconditionsVerified = true;
         }
 
-        internal void RemoveInjectedActionsAndPredicates(List<string> lPlan)
+        internal void RemoveInjectedActionsAndPredicates(List<string> lPlan, bool usedMakeActions = false, string realModifiedAction=null)
         {
             Predicates.Remove(NoOverSpecifications);
             NoOverSpecifications = null;
             if (lPlan is null)
                 lPlan = new List<string>();
-            var modifiedActions = lPlan.Where(entry => entry.Contains("fakePreReq") && entry.EndsWith("-0")).ToList();
+            var modifiedActions = lPlan.Where(entry => entry!=null && entry.Contains("fakePreReq") && entry.EndsWith("-0")).ToList();
             if (modifiedActions.Count() > 0)
             {
                 if (Options.Verbose)
@@ -4498,15 +4508,23 @@ namespace CPORLib.PlanningModel
                     //print some stats
 
                 }
-                var fakeActions = lPlan.Where(entry => entry.Contains("fakePreReq")).ToList();
+                var fakeActions = lPlan.Where(entry => entry != null && entry.Contains("fakePreReq")).ToList();
                 foreach (string s in fakeActions)
                 {
                     lPlan.Remove(s);
                 }
-                foreach (string s in modifiedActions)
+                if (!usedMakeActions)
                 {
-                    PreviouslyModifiedActions.Add(s);
+                    foreach (string s in modifiedActions)
+                    {
+                        PreviouslyModifiedActions.Add(s);
+                    }
                 }
+            }
+            else if (realModifiedAction!=null && Options.Verbose)
+            {
+                Console.WriteLine("----" + realModifiedAction + "----");
+             
             }
             var actionsToRemove = Actions.Where(action => action.Name.Contains("fakePreReq")).ToList();
             foreach (PlanningAction pa in actionsToRemove)
@@ -4527,17 +4545,33 @@ namespace CPORLib.PlanningModel
                 originalPreconditions.TryGetValue(a.Name, out Formula f);
                 a.Preconditions = f;
 
-                foreach (string modifiedAction in modifiedActions)
+                if (realModifiedAction != null && lPlan.Count>0) 
                 {
-                    string actionName = modifiedAction.Substring(12, modifiedAction.IndexOf("-fakePreReq")-12);
+                    string actionName = realModifiedAction.Substring(0, realModifiedAction.Length-1);
+                    
                     if (a.Name == actionName)
                     {
-                        string predName = modifiedAction.Substring(modifiedAction.IndexOf("("), modifiedAction.IndexOf(")") - modifiedAction.IndexOf("(") + 1);
+                        int predNum = (int)char.GetNumericValue(realModifiedAction[realModifiedAction.Length - 1]);
                         PlanningAction aTag = a.Clone();
-
-                        aTag.RemovePrecondition(predName);
+                        aTag.RemovePrecondition(predNum);
                         Actions[i] = aTag;
                         a = aTag;
+                    }
+                }
+                else
+                {
+                    foreach (string modifiedAction in modifiedActions)
+                    {
+                        string actionName = modifiedAction.Substring(12, modifiedAction.IndexOf("-fakePreReq") - 12);
+                        if (a.Name == actionName)
+                        {
+                            string predName = modifiedAction.Substring(modifiedAction.IndexOf("("), modifiedAction.IndexOf(")") - modifiedAction.IndexOf("(") + 1);
+                            PlanningAction aTag = a.Clone();
+
+                            aTag.RemovePrecondition(predName);
+                            Actions[i] = aTag;
+                            a = aTag;
+                        }
                     }
                 }
             }

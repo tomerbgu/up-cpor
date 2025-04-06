@@ -110,6 +110,7 @@ namespace CPORLib.Algorithms
                 Problem.Known.Remove(p);
                 Problem.AddKnown(p.Negate());
             }
+
         }
         
         private bool ValidToInjectInaccuracy(Predicate p)

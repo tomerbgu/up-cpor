@@ -1808,7 +1808,7 @@ namespace CPORLib.PlanningModel
 
         public void GetTaggedDomainAndProblem(PartiallySpecifiedState pssCurrent, List<Action> lAppliedActions, 
             Options.DeadendStrategies dsStrategy, bool bPreconditionFailure,
-            out int cTags, out Domain dTagged, out Problem pTagged, bool falseNegatives, List<string> oldPlan
+            out int cTags, out Domain dTagged, out Problem pTagged, bool falseNegatives, List<string> oldPlan, bool changeState = true
             )
         {
             List<PlanningAction> lFakeActions = null;
@@ -1868,11 +1868,15 @@ namespace CPORLib.PlanningModel
                 }
             }
             cTags = 0;
-            bool change = true;// todo why was this !falseNegatives;
-            if (change)
+            //bool change = true;// todo why was this !falseNegatives;
+            if (changeState)
             {
                 List<ISet<Predicate>> lChosen = ChooseStateSet();
                 ChosenStates = lChosen;
+            }
+            else
+            {
+                ChosenStates.Reverse();
             }
 
             dTagged = null;
@@ -1880,39 +1884,7 @@ namespace CPORLib.PlanningModel
             if (ChosenStates == null)
                 return;
 
-            //BUGBUG;//We should cache the states, try to avoid this useless repetition
-            List<State> lStates = ApplyActions(ChosenStates, lAppliedActions);
-
-            if(lStates.Count == 0)
-            {
-                cTags = 1;
-                pTagged = Problem;
-                dTagged = Problem.Domain;
-                return;
-            }
-
-            HashSet<Predicate> lObserved = new HashSet<Predicate>();
-            Dictionary<string, ISet<Predicate>> dTags = GetTags(lStates, lObserved);
-
-            cTags = dTags.Count;
-
-            if (Options.Translation == Options.Translations.SDR)
-            {
-
-                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null);
-
-            }
-            else
-                throw new NotImplementedException();
-
-
-            if (Options.Translation == Options.Translations.SDR)
-            {
-                pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(), 
-                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, modifyDomainBeforeStateSelection);
-            }
-            else
-                throw new NotImplementedException();
+            GetDTaggedPTagged(pssCurrent, lAppliedActions, out dTagged, out pTagged, out cTags, dsStrategy, bPreconditionFailure, falseNegatives, modifyDomainBeforeStateSelection);
 
             if (falseNegatives)
             {
@@ -1961,6 +1933,44 @@ namespace CPORLib.PlanningModel
             }
 
         }
+
+        private void GetDTaggedPTagged(PartiallySpecifiedState pssCurrent, List<Action> lAppliedActions, out Domain dTagged, out Problem pTagged, out int cTags, Options.DeadendStrategies dsStrategy, bool bPreconditionFailure, bool falseNegatives, bool modifyDomainBeforeStateSelection)
+        {
+            //BUGBUG;//We should cache the states, try to avoid this useless repetition
+            List<State> lStates = ApplyActions(ChosenStates, lAppliedActions);
+
+            if (lStates.Count == 0)
+            {
+                cTags = 1;
+                pTagged = Problem;
+                dTagged = Problem.Domain;
+                return;
+            }
+
+            HashSet<Predicate> lObserved = new HashSet<Predicate>();
+            Dictionary<string, ISet<Predicate>> dTags = GetTags(lStates, lObserved);
+
+            cTags = dTags.Count;
+
+            if (Options.Translation == Options.Translations.SDR)
+            {
+
+                dTagged = Problem.Domain.CreateTaggedDomain(dTags, Problem, null);
+
+            }
+            else
+                throw new NotImplementedException();
+
+
+            if (Options.Translation == Options.Translations.SDR)
+            {
+                pTagged = Problem.CreateTaggedProblem(dTagged, dTags, lObserved, dTags.Values.First(),
+                    lStates.First().FunctionValues, dsStrategy, bPreconditionFailure, pssCurrent.Verified, modifyDomainBeforeStateSelection);
+            }
+            else
+                throw new NotImplementedException();
+        }
+
         private List<PlanningAction> ModifyDomainBeforeStateSelection(bool addActions)
         {
             foreach (Predicate p in Problem.Domain.Uncertainties) {
@@ -3375,7 +3385,7 @@ namespace CPORLib.PlanningModel
                 HashSet<Predicate> hsNew = new HashSet<Predicate>();
                 foreach (Formula fCurrent in lCurrentFormulas)
                 {
-                    if (fCurrent.IsTrue(pssCurrent.Observed) && (!actionFailureFlag || !fCurrent.Simplify().IsTrue(null)))
+                    if (fCurrent.IsTrue(pssCurrent.Observed) && (!actionFailureFlag || fCurrent.Simplify().IsTrue(null)))
                         continue;//used to be break but I think that if we got here then there is no point in continuing...
                     //is false doesn't properly work here
                     //Debug.Assert(fCurrent.IsFalse(pssCurrent.Observed), "Rgression of an observation returned false");
