@@ -19,9 +19,9 @@ namespace CPORLib.Tools
         public enum InaccuracyHandlingStrategies { BLPessimistic, BLOptimistic, Lazy, MakeTrue };
         public static InaccuracyHandlingStrategies InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.Lazy;
         public enum PredicateInaccuracies { FalsePositive, FalseNegative, Both, Neither }
-        public static PredicateInaccuracies PredicateInaccuracy = PredicateInaccuracies.FalsePositive; //false creates deadends. true creates failures
+        public static PredicateInaccuracies PredicateInaccuracy = PredicateInaccuracies.Neither; 
 
-        public static bool OverspecifiedPreconditions = false;
+        public static bool OverspecifiedPreconditions = true;
         public static bool AllowMultipleOverSpecifications = false;
         public static bool FixOneAtATime = true; //for overspecified preconditions
         public static bool UseCosts = true;
@@ -32,9 +32,9 @@ namespace CPORLib.Tools
 
         public static bool Verbose = false;
         public static double threshold = 0.2;
-        public static int Iterations = 30;
-        public static int MaxIterations = 10;
-        public static int MaxTime = 60;
+        public static int Iterations = 5;
+        public static int MaxIterations = 5;
+        public static int MaxTime = 30;
         public static int Factor = 3;
 
 

@@ -10,7 +10,7 @@ namespace CPORLib.Tools
     {
         public bool FinalStateDeadend { get; set; }
         public bool InitialStateDeadend { get; set; }
-
+        public int Seed { get; set; }
         public int SensingActions { get; set; }
         public int EffectActions { get; set; }
         public int Actions { get; set; }

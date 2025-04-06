@@ -130,7 +130,7 @@ namespace CPORLib
 
             Domain domain = parser.ParseDomain(sDomainFile);
             Problem problem = parser.ParseProblem(sProblemFile, domain);
-
+            Console.WriteLine($"{Options.PredicateInaccuracy}");
             Console.WriteLine($"Init Known - True:\t{problem.Known.Where(p=>!p.Negation && domain.Uncertainties.Select(u=>u.Name).Contains(p.Name)).Count()}");
             Console.WriteLine($"Init Known - False:\t{problem.Known.Where(p => p.Negation && domain.Uncertainties.Select(u => u.Name).Contains(p.Name)).Count()}");
         }
