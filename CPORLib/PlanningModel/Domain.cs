@@ -228,19 +228,6 @@ namespace CPORLib.PlanningModel
 
         public void AddUncertainty(Predicate p)
         {
-            if (p is ParametrizedPredicate pp)
-            {
-                ParametrizedPredicate ppNew = new ParametrizedPredicate(pp.Name);
-                foreach (Parameter param in pp.Parameters)
-                {
-                    string sName = param.Name;
-                    if (!sName.StartsWith("?"))
-                        sName = "?" + sName;
-                    Parameter paramNew = new Parameter(param.Type, sName);
-                    ppNew.AddParameter(paramNew);
-                }
-                p = ppNew;
-            }
             //Predicates.Add(p);
             Uncertainties.Add(p);
             //m_lAlwaysKnown.Add(p.Name);
@@ -974,10 +961,11 @@ namespace CPORLib.PlanningModel
                 }
                 else
                     throw new Exception();
-                a.Preconditions = new CompoundFormula("and");
+                //a.Preconditions = new CompoundFormula("and");
                 Predicate verified = p.CreateVerifiedPredicate();
                 a.AddPrecondition(verified.Negate());
-
+                //Predicate pKN = p.Clone();
+                a.AddPrecondition(p.Negate());
                 CompoundFormula andEffect = new CompoundFormula("and");
                 ParametrizedPredicate pp2 = new ParametrizedPredicate(p.Name);
                 foreach (Parameter par in a.Parameters)
@@ -3920,11 +3908,12 @@ namespace CPORLib.PlanningModel
                 {
                     if (Options.UseFakePreds && Options.NumFakePreds == 1)
                     {
-                        predToAdd = (ParametrizedPredicate)FakePredicates[0].Clone();
+                        predToAdd = (ParametrizedPredicate)FakePredicates[0];
                         randomIndex = RandomGenerator.Next(aPar.Parameters.Count);
                         predToAdd.AddParameter(aPar.Parameters[randomIndex]);
                         AddPredicate(predToAdd);
                         fakePredicates.Add(predToAdd);
+                        //AddUncertainty(predToAdd);
                     }
                     else
                     {
@@ -4192,8 +4181,8 @@ namespace CPORLib.PlanningModel
         {
             List<PlanningAction> relaxedActions = new List<PlanningAction>();
 
-            List<PlanningAction> deleteRelaxationActions = Actions; //getDeleteRelaxationActions(); //Actions
-            foreach (ParametrizedAction a in deleteRelaxationActions)
+            List<PlanningAction> deleteRelaxationActions = Actions.Where(a=> !a.Name.StartsWith("prepare-for-")).ToList(); //getDeleteRelaxationActions(); //Actions
+            foreach (PlanningAction a in deleteRelaxationActions)
             {
                 a.Preconditions = originalPreconditions[a.Name];
                 if (a.Preconditions == null)
@@ -4521,9 +4510,12 @@ namespace CPORLib.PlanningModel
                     }
                 }
             }
-            else if (realModifiedAction!=null && Options.Verbose)
+            else if (realModifiedAction!=null)
             {
-                Console.WriteLine("----" + realModifiedAction + "----");
+                if (!usedMakeActions)
+                    PreviouslyModifiedActions.Add(realModifiedAction);
+                if (Options.Verbose)
+                    Console.WriteLine("----" + realModifiedAction + "----");
              
             }
             var actionsToRemove = Actions.Where(action => action.Name.Contains("fakePreReq")).ToList();

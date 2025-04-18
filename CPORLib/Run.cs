@@ -165,6 +165,7 @@ namespace CPORLib
                 }
                 SDRPlanner sdr = new SDRPlanner(domain, problem);
                 Simulator sim = new Simulator(domain, problem);
+
                 DateTime dtStart = DateTime.Now;
 
                 int idx = 0;

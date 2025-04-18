@@ -35,7 +35,6 @@ namespace CPORLib.Algorithms
             Problem = new Problem(problem);
             Domain = Problem.Domain;
 
-
             //this is part of experiment setup - over specify preconditions in Planner
             if (Options.OverspecifiedPreconditions)
             {
@@ -47,8 +46,11 @@ namespace CPORLib.Algorithms
             }
             //end part
 
+            //Problem = new Problem(problem);
+            //Domain = Problem.Domain;
+
             //this is part of our experiment setup for negating initial literals
-            NegatePredicatesForSimulations(problem, domain);
+            NegatePredicatesForSimulations(Problem, domain);
             //end part
 
 

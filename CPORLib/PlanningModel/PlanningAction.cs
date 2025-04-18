@@ -1234,7 +1234,8 @@ namespace CPORLib.PlanningModel
             else
             {
                 CompoundFormula cfAnd = new CompoundFormula("and");
-                cfAnd.AddOperand(Preconditions);
+                if (Preconditions != null)
+                    cfAnd.AddOperand(Preconditions);
                 cfAnd.AddOperand(p);
                 Preconditions = cfAnd;
             }

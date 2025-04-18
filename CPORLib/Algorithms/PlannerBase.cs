@@ -516,37 +516,37 @@ namespace CPORLib.Algorithms
                     Problem pTaggedDE = null;
 
                     //first try and see if there is a way to do it without modifying actions
-                    try
-                    {
+                    //try
+                    //{
                         
 
-                        //only preconditions
-                        if (Options.OverspecifiedPreconditions && Options.PredicateInaccuracy == PredicateInaccuracies.Neither)
-                            SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                    //only preconditions
+                    if (Options.OverspecifiedPreconditions && Options.PredicateInaccuracy == PredicateInaccuracies.Neither)
+                        SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
 
-                        //only state inaccuracies
-                        else if (!Options.OverspecifiedPreconditions &&
-                                 (Options.PredicateInaccuracy == PredicateInaccuracies.FalseNegative || Options.PredicateInaccuracy == PredicateInaccuracies.Both))
-                            SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                    //only state inaccuracies
+                    else if (!Options.OverspecifiedPreconditions &&
+                                (Options.PredicateInaccuracy == PredicateInaccuracies.FalseNegative || Options.PredicateInaccuracy == PredicateInaccuracies.Both))
+                        SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
 
-                        //both
-                        else
-                        {
-                            //ordinal
-                            //if (Options.PredicateInaccuracy == PredicateInaccuracies.FalseNegative || Options.PredicateInaccuracy == PredicateInaccuracies.Both)
-                            //    SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
-                            //else if (Options.OverspecifiedPreconditions)
-                            //    SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
-
-                            SolveBoth(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
-                        }
-                        
-                    }
-                    catch (Exception ex) when (ex is OverspecifiedPreconditionException || ex is DeadendException)
+                    //both
+                    else
                     {
-                        if (Options.OverspecifiedPreconditions)
-                            SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                        //ordinal
+                        //if (Options.PredicateInaccuracy == PredicateInaccuracies.FalseNegative || Options.PredicateInaccuracy == PredicateInaccuracies.Both)
+                        //    SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                        //else if (Options.OverspecifiedPreconditions)
+                        //    SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+
+                        SolveBoth(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
                     }
+                        
+                    //}
+                    //catch (Exception ex) when (ex is OverspecifiedPreconditionException || ex is DeadendException)
+                    //{
+                    //    if (Options.OverspecifiedPreconditions)
+                    //        SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                    //}
                 }
                 if (lPlan == null)
                 {
@@ -593,11 +593,7 @@ namespace CPORLib.Algorithms
                 {
                     if (Options.Verbose)
                         Console.WriteLine(s);
-                    //why action?? todo tomer
-                    //string[] aName = Utilities.SplitString(s, ' ');
-                    //PlanningAction a = Domain.GroundActionByName(aName);
-                    //Predicate p = ((CompoundFormula)(a.Effects)).Operands[0].GetAllPredicates().First();
-                    //GroundedPredicateFactory.AllGrounded.TryGetValue(s.Substring(5), out GroundedPredicate gp);
+
                     string[] pString = Utilities.SplitString(s.Substring(5), ' ');
                     ParametrizedPredicate p = (ParametrizedPredicate)Domain.Predicates.First(pp => pp.Name == pString[0]);
                     Dictionary<Parameter, Constant> dBindings = new Dictionary<Parameter, Constant>();
@@ -608,7 +604,7 @@ namespace CPORLib.Algorithms
                     }
                     GroundedPredicate gp = p.Ground(dBindings);
 
-                    //GroundedPredicate gp = GroundedPredicateFactory.Get(s.Substring(5), new List<Argument>(), null, false);
+
                     pssCurrent.RemoveObservedPredicate(gp.Negate());
 
                 }
