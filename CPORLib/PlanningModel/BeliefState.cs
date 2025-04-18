@@ -1512,7 +1512,11 @@ namespace CPORLib.PlanningModel
             {
                 lHidden.Add(new PredicateFormula(p));
             }
-            
+            bool bValid1 = ApplyUnitPropogation(lHidden, lAssignment);
+            if (!bValid1)
+            {
+                throw new Exception("Problem with unit propogation while choosing hidden predicates");
+            }
             while (lUnknown.Count > 0)
             {
                 bool bAllTrue = false, bAllFalse = false;
@@ -1528,7 +1532,12 @@ namespace CPORLib.PlanningModel
 
                 bool bValid = ApplyUnitPropogation(lHidden, lAssignment);
                 if (!bValid)
+                {
+                    //Console.WriteLine("")
+                    //continue;
                     return null;
+                }
+                    
                 //List<CompoundFormula> lReduced = AddAssignment(lHidden, lNewAssignment, lNewUnknown, pCurrent);
                 foreach (Predicate p in lAssignment)
                     lUnknown.Remove(p.Canonical());
