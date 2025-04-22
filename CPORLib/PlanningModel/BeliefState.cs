@@ -1987,25 +1987,30 @@ namespace CPORLib.PlanningModel
 
         private List<PlanningAction> ModifyDomainBeforeStateSelection(bool addActions)
         {
-            foreach (Predicate p in Problem.Domain.Uncertainties) {
-                Problem.Domain.AddPredicate(p.CreateVerifiedPredicate());
-
+            
+            List<Predicate> pToAdd = new List<Predicate>();
+            foreach (Predicate p in Problem.Domain.Predicates)
+            {
                 //Predicate xPred = p.GetXorPredicate();
                 //ParametrizedPredicate xor = new ParametrizedPredicate(xPred.Name);
                 //xor.AddParameter(new Parameter(((GroundedPredicate)xPred).Constants[0].Type, "i"));
-                Problem.Domain.AddPredicate(p.GetXorPredicate());
+                pToAdd.Add(p.GetXorPredicate());
 
                 //Predicate moPred = p.GetMOPredicate();
                 //ParametrizedPredicate mo = new ParametrizedPredicate(moPred.Name);
                 //mo.AddParameter(new Parameter(((GroundedPredicate)moPred).Constants[0].Type, "i"));
-                Problem.Domain.AddPredicate(p.GetMOPredicate());
+                pToAdd.Add(p.GetMOPredicate());
+            }
+            foreach (Predicate p in pToAdd)
+            {
+                Problem.Domain.AddPredicate(p);
+            }
+            foreach (Predicate p in Problem.Domain.Uncertainties)
+            {
+                Problem.Domain.AddPredicate(p.CreateVerifiedPredicate());
             }
 
-            //GenericArraySet<Predicate> preds = new GenericArraySet<Predicate>(new GroundedPredicate();
-            //foreach (CompoundFormula oo in allOneOfs)
-            //    preds.UnionWith(oo.GetAllPredicates());
 
-            
 
             Predicate wip = new GroundedPredicate("WIP");
             Problem.Domain.AddPredicate(wip);

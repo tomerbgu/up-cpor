@@ -656,12 +656,17 @@ namespace CPORLib.Algorithms
                 {
                     Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
                     pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
-
-                    Problem.Domain.RemoveFakePredicate(p.GetMOPredicate());
-                    pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(p.GetMOPredicate());
-
-                    Problem.Domain.RemoveFakePredicate(p.GetXorPredicate());
-                    pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(p.GetXorPredicate());
+                }
+                List<Predicate> predicates = new List<Predicate>();
+                foreach (Predicate p in Problem.Domain.Predicates)
+                {
+                    predicates.Add(p.GetMOPredicate());
+                    predicates.Add(p.GetXorPredicate());
+                }
+                foreach (Predicate p in predicates)
+                {
+                    Problem.Domain.RemoveFakePredicate(p);
+                    pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(p);
                 }
                 Problem.Domain.RemoveFakePredicate(new GroundedPredicate("WIP"));
                 pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(new GroundedPredicate("WIP"));
