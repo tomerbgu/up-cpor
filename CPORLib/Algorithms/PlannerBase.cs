@@ -532,13 +532,19 @@ namespace CPORLib.Algorithms
                     //both
                     else
                     {
-                        //ordinal
-                        //if (Options.PredicateInaccuracy == PredicateInaccuracies.FalseNegative || Options.PredicateInaccuracy == PredicateInaccuracies.Both)
-                        //    SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
-                        //else if (Options.OverspecifiedPreconditions)
-                        //    SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                        if (Options.SolveBothSequentially)
+                        {
+                            //first OP
+                            SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
 
-                        SolveBoth(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                            //first FN
+                            //SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                        }
+
+
+
+                        else
+                            SolveBoth(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
                     }
                         
                     //}
@@ -578,8 +584,25 @@ namespace CPORLib.Algorithms
             }
 
         }
-        private bool SolveByChangingFalseNegatives(out List<string> lPlan, PartiallySpecifiedState pssCurrent, Domain dTaggedDE, Problem pTaggedDE)
+        private HashSet<Predicate> modifiedPredicates = new HashSet<Predicate>();
+        private string prevModifiedAction;
+        private void resetModifiedPredicates(PartiallySpecifiedState pss, string modifiedAction)
         {
+            //if (!modifiedAction.Equals(prevModifiedAction))
+            //{
+            foreach (Predicate p in modifiedPredicates)
+            {
+                if (!pss.Verified.Contains(p) && !pss.Verified.Contains(p.Negate()))
+                    pss.AddObserved(p);
+            }
+                
+            //}
+            modifiedPredicates = new HashSet<Predicate>();
+        }
+
+        private bool SolveByChangingFalseNegatives(out List<string> lPlan, PartiallySpecifiedState pssCurrent, Domain dTaggedDE, Problem pTaggedDE, string modifiedAction = "")
+        {
+            resetModifiedPredicates(pssCurrent, modifiedAction);
             pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out int ctags, out dTaggedDE, out pTaggedDE, true, null);
 
             ExecutionData.ReplanningCount++;
@@ -606,7 +629,7 @@ namespace CPORLib.Algorithms
 
 
                     pssCurrent.RemoveObservedPredicate(gp.Negate());
-
+                    modifiedPredicates.Add(gp.Negate());
                 }
                 RemoveInjectedPredicates();
             }
@@ -619,7 +642,7 @@ namespace CPORLib.Algorithms
             if (lPlan == null || lPlan.Count() == 0)
             {
                 Debug.WriteLine("Classical Planner Failed to find solution after deadend");
-                throw new OverspecifiedPreconditionException("Failed to solve problem  (Deadend) even after modifying initial predicated to account for false negatives.");
+                throw new DeadendException("Failed to solve problem  (Deadend) even after modifying initial predicated to account for false negatives.");
             }
 
             int makeActions = lPlan.Count(s => s.StartsWith("Make:"));
@@ -669,7 +692,6 @@ namespace CPORLib.Algorithms
                 }
                 List<PlanningAction> newActions = Domain.GetRelaxedActionsByPriority(expandedState, out modifiedAction);
                 List<PlanningAction> oldActions = Domain.Actions;
-
                 Domain.Actions = newActions;
                 Domain.ComputeAlwaysKnown();
 
@@ -678,9 +700,20 @@ namespace CPORLib.Algorithms
 
                 pssCurrent.m_bsInitialBelief.Problem.Domain = Domain;
                 pssCurrent.Problem.Domain = Domain;
-                bool changed = SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
-                RemovePreconditionAttemptPostprocess(lPlan, pssCurrent, oldActions, changed, modifiedAction);
-                return;
+                bool changed = false;
+                try
+                {
+                    changed = SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE, modifiedAction);
+                }
+                catch (DeadendException de)
+                {
+                }
+                finally
+                {
+                    prevModifiedAction = modifiedAction;
+                    RemovePreconditionAttemptPostprocess(lPlan, pssCurrent, oldActions, changed, modifiedAction);
+                }
+                //return;
             }
         }
 
@@ -762,7 +795,7 @@ namespace CPORLib.Algorithms
                     try
                     {
                         //if removing a precond didnt work try seeing if it is affected by FN
-                        if (Options.PredicateInaccuracy==PredicateInaccuracies.FalseNegative || Options.PredicateInaccuracy==PredicateInaccuracies.Both)
+                        if (Options.PredicateInaccuracy==PredicateInaccuracies.Both && Options.SolveBothSequentially)
                             SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
                         //if (lPlan==null || lPlan.Count == 0)
                     }

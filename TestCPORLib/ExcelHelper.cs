@@ -22,9 +22,9 @@ namespace RunCPOR
             worksheet.Cells[endRow, startCol, endRow, endCol].Style.Border.Bottom.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thick;  // Bottom border
         }
 
-        private static void FormatTable(ExcelWorksheet worksheet, string problemName, int count, int top, List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> EDList, int overlap)
+        private static void FormatTable(ExcelWorksheet worksheet, string problemName, int count, int top, List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> EDList, int overlap, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>> settings)
         {
-            int numOfStats = 9;
+            int numOfStats = 11;
             worksheet.Cells[top + 1, 1, top + numOfStats, 1].Merge = true;
             worksheet.Cells[top + 1, 1, top + numOfStats, 1].Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Center;
             worksheet.Cells[top + 1, 1, top + numOfStats, 1].Style.VerticalAlignment = OfficeOpenXml.Style.ExcelVerticalAlignment.Center;
@@ -72,8 +72,8 @@ namespace RunCPOR
             ApplyBoldOutline(worksheet, top + 1, 19, top + numOfStats, 22);
             worksheet.Cells[top + 1, 19].Value = "Fake Threshold = 0.8";
 
-            Dictionary<int, string> costs = new Dictionary<int, string> { { 0, EDList[0].Item3.ToString() }, { 1, EDList[1].Item3.ToString() },
-                                                                          { 2, EDList.Count>2 ? EDList[2].Item3.ToString() : "NA"}, { 3, EDList.Count>3 ? EDList[3].Item3.ToString() : "NA"} };
+            Dictionary<int, string> costs = new Dictionary<int, string> { { 0, settings[0].Item1.ToString() }, { 1,  settings.Count>1 ? settings[1].Item1.ToString() : "NA"},
+                                                                          { 2, settings.Count>2 ? settings[2].Item1.ToString() : "NA"}, { 3, settings.Count>3 ? settings[3].Item1.ToString() : "NA"} };
             if (Options.OverspecifiedPreconditions)
                 costs = new Dictionary<int, string> { { 0, "No Costs" }, { 1, "Cost=1" }, { 2, "Cost=5" }, { 3, "Cost=20"} };
 
@@ -85,6 +85,8 @@ namespace RunCPOR
             int firstStat = 3;
             worksheet.Cells[top + firstStat++, 2].Value = "Actions";
             worksheet.Cells[top + firstStat++, 2].Value = $"ActionsOverlap={overlap}";
+            worksheet.Cells[top + firstStat++, 2].Value = $"TimeOverlap={overlap}";
+            worksheet.Cells[top + firstStat++, 2].Value = $"FailOverlap={overlap}";
             worksheet.Cells[top + firstStat++, 2].Value = $"Success/{Options.Iterations}";
             worksheet.Cells[top + firstStat++, 2].Value = "Deadends";
             worksheet.Cells[top + firstStat++, 2].Value = "Replanning";
@@ -95,7 +97,7 @@ namespace RunCPOR
         }
 
         static string plusMinus = "±";
-        public static void WriteToExcel(string folderPath, string sTestPath, List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> EDList, HashSet<int> seedSet, List<string> settings)
+        public static void WriteToExcel(string folderPath, string sTestPath, List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> EDList, HashSet<int> seedSet, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>> settings)
         {
             string[] filePaths = {folderPath + $"/output_summary_{DateTime.Now.ToString("MM_dd_HHmmss")}_{Options.PredicateInaccuracy}_{Options.OverspecifiedPreconditions}.xlsx",
                 sTestPath + $"/output_summary_{DateTime.Now.ToString("MM_dd_HHmmss")}_{Options.PredicateInaccuracy}_{Options.OverspecifiedPreconditions}.xlsx" };
@@ -110,7 +112,7 @@ namespace RunCPOR
 
                     // Merging cells for header
                     int top = 0;
-                    FormatTable(worksheet, problemName, count, top, EDList, seedSet.Count);
+                    FormatTable(worksheet, problemName, count, top, EDList, seedSet.Count, settings);
 
                     int col = 3;
                     int settingsCounter = 0;
@@ -118,7 +120,7 @@ namespace RunCPOR
                     {
                         int row = 3;
                         Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string> entry = EDList[i];
-                        while (entry.Item4 != settings[i + settingsCounter])
+                        while (entry.Item4 != settings[i + settingsCounter].ToString())
                         {
                             settingsCounter++;
                             col++;
@@ -136,16 +138,26 @@ namespace RunCPOR
                         var filteredActionsList = filteredED.Select(e => e.Actions).ToList();
                         double filteredAvgActions = filteredActionsList.Average();
                         double filteredStdDevActions = Math.Sqrt(filteredActionsList.Average(t => Math.Pow(t - filteredAvgActions, 2)));
-
-                        worksheet.Cells[top + row++, col].Value = $"{filteredAvgActions.ToString("F2")} {plusMinus} {filteredStdDevActions.ToString("F2")}";
-                        worksheet.Cells[top + row++, col].Value = ((double) ED.Count/count).ToString("F2");
-                        worksheet.Cells[top + row++, col].Value = ED.Average(obj => obj.stepsToReplan.Count);
-                        worksheet.Cells[top + row++, col].Value = ED.Average(obj => obj.ReplanningCount);
-
-                        // Failures
-                        var failuresList = ED.Select(e => e.FailCount).ToList();
+                        // Time stats (convert to total seconds)
+                        var filteredTimeList = filteredED.Select(e => e.Time.TotalSeconds).ToList();
+                        double filteredAvgTime = filteredTimeList.Average();
+                        double filteredStdDevTime = Math.Sqrt(filteredTimeList.Average(t => Math.Pow(t - filteredAvgTime, 2)));
+                        //fail stats
+                        var failuresList = filteredED.Select(e => e.FailCount).ToList();
                         double avgFail = failuresList.Average();
                         double stdDevFail = Math.Sqrt(failuresList.Average(t => Math.Pow(t - avgFail, 2)));
+                        worksheet.Cells[top + row++, col].Value = $"{filteredAvgActions.ToString("F2")} {plusMinus} {filteredStdDevActions.ToString("F2")}";
+                        worksheet.Cells[top + row++, col].Value = $"{filteredAvgTime.ToString("F2")} {plusMinus} {filteredStdDevTime.ToString("F2")}";
+                        worksheet.Cells[top + row++, col].Value = $"{avgFail.ToString("F2")} {plusMinus} {stdDevFail.ToString("F2")}";
+
+                        worksheet.Cells[top + row++, col].Value = ((double) ED.Count/count).ToString("F2");
+                        worksheet.Cells[top + row++, col].Value = ED.Average(obj => obj.stepsToReplan.Count).ToString("F2");
+                        worksheet.Cells[top + row++, col].Value = ED.Average(obj => obj.ReplanningCount).ToString("F2");
+
+                        // Failures
+                        failuresList = ED.Select(e => e.FailCount).ToList();
+                        avgFail = failuresList.Average();
+                        stdDevFail = Math.Sqrt(failuresList.Average(t => Math.Pow(t - avgFail, 2)));
                         worksheet.Cells[top + row++, col].Value = $"{avgFail.ToString("F2")} {plusMinus} {stdDevFail.ToString("F2")}";
 
                         // Time stats (convert to total seconds)

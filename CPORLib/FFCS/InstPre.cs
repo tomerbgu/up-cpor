@@ -1090,6 +1090,7 @@ namespace CPORLib.FFCS
             if (FF.DP.ggoal.connective == FAL)
             {
                 FFUtilities.Write("\nff: goal can be simplified to false. No plan will solve it\n\n");
+                throw new DeadendException("Deadend");
                 Exit(1);
             }
             /* put goal into DNF riFF.Search.gHt away: fully instantiated already

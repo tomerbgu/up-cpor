@@ -57,15 +57,21 @@ public class Program
 
             Console.WriteLine($"Settings: {setting}");
             List<ExecutionData> ED = new List<ExecutionData>();
-            TimeSpan totalTime = TimeSpan.Zero; 
-            bool TimeOutFlag = false;
-            for (int i = 0; i < Options.Iterations; i++)
+            TimeSpan totalTime = TimeSpan.Zero;
+            //bool TimeOutFlag = false;
+            bool op = Options.OverspecifiedPreconditions && Options.PredicateInaccuracy == PredicateInaccuracies.Neither;
+            int numIterations = op ? Options.MaxIterations : Options.Iterations;
+            for (int i = 0; i < numIterations; i++)
             {
+                //TimeOutFlag = false;
                 SetRandomSeed(i, seeds, NoDeadends);
                 if (canOverride)
                 {
                     Console.WriteLine("===================Overwriting random seed!!===================");
-                    //RandomGenerator.Init(392); 
+                    //RandomGenerator.Init(538); 
+                    //RandomGenerator.Init(218);
+                    //RandomGenerator.Init(424);
+                    RandomGenerator.Init(182);
                     Console.WriteLine();
                 }
 
@@ -87,7 +93,7 @@ public class Program
                 {
                     Console.WriteLine("Main thread requests stop...");
                     cts.Cancel();
-                    TimeOutFlag = true;
+                    //TimeOutFlag = true;
                     _ = MonitorWorker(); // Fire and forget
 
                     //save lists of random seeds that were successful
@@ -103,25 +109,35 @@ public class Program
                     continue;
                 }
                 res.Seed = seeds.ElementAt(i);
-                
+
                 //if (res.FailCount > 0)
                 //{
                 //    //Console.WriteLine($"Succeeded with {sdr.ExecutionData.FailCount} Fails");
                 //}
-                //if (res.ReplanningCount > 0)
-                //{
-                //    Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
-                //    //    ED.Add(res); //this is here bc it makes more sense for replanning
-                //    //Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
-                //}
+                if (op)
+                {
+                    if (res.ReplanningCount > 0)
+                    {
+                        Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
+                        ED.Add(res); //this is here bc it makes more sense for replanning
+                    }
+                    else
+                    {
+                        Console.WriteLine("No failures, not counting instance");
+                    }
+                    //Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
+                }
                 //else
                 //{
                 //    Console.WriteLine($"Overspec did not lead to deadend");
                 //}
                 //if (Options.OverspecifiedPreconditions)
                 //    ED.Add(res);
-                ED.Add(res); //this is here bc it makes more sense for replanning
-                Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}, {i+1} trials");
+                else
+                {
+                    ED.Add(res); //this is here bc it makes more sense for replanning
+                    Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}, {i + 1} trials");
+                }
             }
 
             foreach (var obj in ED)
@@ -129,8 +145,8 @@ public class Program
                 totalTime += obj.Time;
             }
 
-            if (!TimeOutFlag)
-                ExecutionData.Add(Tuple.Create(ED, TimeSpan.FromTicks(totalTime.Ticks / Math.Max(1, ED.Count)), InaccuracyHandlingStrategy, setting.ToString()));
+            //if (!TimeOutFlag)
+            ExecutionData.Add(Tuple.Create(ED, TimeSpan.FromTicks(totalTime.Ticks / Math.Max(1, ED.Count)), InaccuracyHandlingStrategy, setting.ToString()));
             
             if (ED.Count > 0)
             {
@@ -138,7 +154,7 @@ public class Program
                 ExcelHelper.writeSummary(folderPath, ED, TimeSpan.FromTicks(totalTime.Ticks / ED.Count), setting.ToString());
             }
         }
-        ExcelHelper.WriteToExcel(folderPath, genPath, ExecutionData, seedSet, settings.Select(t => t.ToString()).ToList());
+        ExcelHelper.WriteToExcel(folderPath, genPath, ExecutionData, seedSet, settings);
     }
 
     
@@ -153,45 +169,76 @@ public class Program
             if (Options.PredicateInaccuracy != PredicateInaccuracies.Both)
             {
                 settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, true, 1, false, 0.2));
-                settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLPessimistic, true, 1, true, 0.2));
-                settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, true, 0.2));
+                settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLPessimistic, true, 1, false, 0.2));
+                settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, false, 0.2));
                 
                 if (Options.PredicateInaccuracy != PredicateInaccuracies.FalsePositive)
                     settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, false, 0.2));
             }
             else
             {
-                //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, true, 1, false, 0.2));
-                settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, true, 0.0));
-                settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, false, 0.0));
+                settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, true, 1, false, 0.2));
+                settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, true, 0.2));
+                settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, false, 0.2));
             }
+        }
+        else if (Options.PredicateInaccuracy == PredicateInaccuracies.Neither)
+        {
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, false, 0.0));
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, false, 0.0));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, true, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, true, 0.0));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, true, 0.2));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, true, 0.2));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, true, 0.5));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, true, 0.5));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, true, 0.8));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, true, 0.8));
         }
         else
         {
+            Options.SolveBothSequentially = false;
             settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, false, 0.0));
             settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, false, 0.0));
             settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 5, false, 0.0));
             settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 20, false, 0.0));
 
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, true, 0.0));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, true, 0.0));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 5, true, 0.0));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 20, true, 0.0));
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, false, 0, false, 0.0));
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, false, 0.0));
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, false, 0.0));
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, false, 0.0));
 
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, true, 0.2));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, true, 0.2));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 5, true, 0.2));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 20, true, 0.2));
+            Options.SolveBothSequentially = true;
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, false, 0.0));
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, false, 0.0));
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 5, false, 0.0));
+            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 20, false, 0.0));
 
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, true, 0.5));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, true, 0.5));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 5, true, 0.5));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 20, true, 0.5));
+            
 
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, true, 0.8));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, true, 0.8));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 5, true, 0.8));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 20, true, 0.8));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, true, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, true, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, true, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, true, 0.0));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, false, 0, true, 0.2));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, true, 0.2));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, true, 0.2));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, true, 0.2));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, false, 0, true, 0.5));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, true, 0.5));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, true, 0.5));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, true, 0.5));
+
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, false, 0, true, 0.8));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, true, 0.8));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, true, 0.8));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, true, 0.8));
         }
         //mixes
         //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, false, 1, true, 0.0));
@@ -278,19 +325,27 @@ public class Program
         gcmd_line.debug = 0;
         string sPath = @"C:\Users\travkaie\OneDrive - Intel Corporation\Documents\School\up-cpor\Tests\";
         //Options.SDR_OBS = true;
-        //RunTest("colorballs2-2", bOnline, sPath);
+        //RunTest("localize", bOnline, sPath);
         //RunTest("colorballs4-4", bOnline, sPath);
         //RunTest("colorballs5-1", bOnline, sPath);
         //RunTest("colorballs8-4", bOnline, sPath);
         //RunTest("colorballs9-3", bOnline, sPath);
         //RunTest("colorballs11-1", bOnline, sPath);
         //RunTest("colorballs11-2", bOnline, sPath);
-        RunTest("unix1", bOnline, sPath);
-        //RunTest("doors7", bOnline, sPath);
+
+        RunTest("unix2", bOnline, sPath);
+        //RunTest("unix3", bOnline, sPath);
+
+        //RunTest("doors9", bOnline, sPath);
+        //RunTest("doors13", bOnline, sPath);
+        //RunTest("doors15", bOnline, sPath);
         //RunTest("colorballs2-2", bOnline, sPath);
-        //RunTest("clog5", bOnline, sPath);
+        //RunTest("cloghuge", bOnline, sPath);
+
         //RunTest("blocks7", bOnline, sPath);
-        //RunTest("wumpus05", bOnline, sPath);
+
+        //RunTest("wumpus10", bOnline, sPath);
+        //RunTest("wumpus15", bOnline, sPath);
 
 
 
@@ -306,6 +361,8 @@ public class Program
         TestAll(true);
         return;
         canOverride = false;
+        Options.OverspecifiedPreconditions = false;
+        Options.PredicateInaccuracy = Options.PredicateInaccuracies.Neither;
         if (args.Length < 1)
         {
             Console.WriteLine("Usage: RunPlanner domain_file max_time fp/fn");
@@ -332,13 +389,17 @@ public class Program
                     Options.OverspecifiedPreconditions = true;
                 }
                 else
-                    Console.WriteLine("Usage: RunPlanner domain_file fp/fn max_time");
+                    Console.WriteLine($"Usage: got weird inaccuracy: {literalInaccuacies}");
             }
             if (args.Length > 2)
             {
                  int.TryParse(args[2], out Options.MaxTime);
             }
-            
+            if (args.Length > 3)
+            {
+                double.TryParse(args[2], out Options.threshold);
+            }
+
             _ = RunTest(args[0], true, @"Tests/");
             return;
         }

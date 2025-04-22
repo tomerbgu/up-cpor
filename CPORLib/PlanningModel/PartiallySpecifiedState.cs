@@ -24,7 +24,7 @@ namespace CPORLib.PlanningModel
         public GenericArraySet<Predicate> Observed { get { return m_lObserved; } }
         public GenericArraySet<Predicate> Verified { get { return UseVerifiedList() ? m_lObserved : m_lVerified; } }
         public GenericArraySet<Predicate> Hidden { get { return m_lHidden; } }
-        public GenericArraySet<Predicate> m_lObserved;
+        public GenericArraySet<Predicate> m_lObserved { get; set; }
         public GenericArraySet<Predicate> m_lVerified;
         protected GenericArraySet<Predicate> m_lHidden;
         public List<Action> AvailableActions { get; protected set; }
@@ -1779,9 +1779,11 @@ namespace CPORLib.PlanningModel
                 aMod.Observe = null;
                 bsNew2.GeneratingAction = aMod; //TODO maybe this needs to be aOrg
 
-
+                GenericArraySet<Predicate> OldObserved = new GenericArraySet<Predicate>();
+                foreach (Predicate p in Observed)
+                    OldObserved.Add(p);
                 Formula knewKnowledge = bsNew2.RemoveObservedPreCond(aOrg, out bool failFlag);
-                if (Options.OverspecifiedPreconditions && (knewKnowledge == null || (failFlag && knewKnowledge.IsTrue(Observed)))) //if a precondition was wrongfully removed
+                if (Options.OverspecifiedPreconditions && (knewKnowledge == null || (failFlag && knewKnowledge.IsTrue(OldObserved)))) //if a precondition was wrongfully removed
                     Problem.Domain.RestorePrecondition(aOrg);
                 else
                 {
@@ -1889,7 +1891,7 @@ namespace CPORLib.PlanningModel
                     return null;
 
                 bsNew.GeneratingObservation = fObserve;
-                
+                bsNew.GeneratingAction.Effects = fObserve;
 
                 /*
                 if (ReviseInitialBelief(fObserve))
@@ -3630,6 +3632,18 @@ namespace CPORLib.PlanningModel
         private bool UseVerifiedList()
         {
             return Options.PredicateInaccuracy == PredicateInaccuracies.Neither || isSim;
+        }
+        private HashSet<Predicate> modifiedPredicates = new HashSet<Predicate>();
+
+        internal List<Predicate> RemoveUnverifiedNegativeFacts()
+        {
+            List<Predicate> unVerified = Observed.Where(p => !Verified.Contains(p) && !Verified.Contains(p.Negate())).ToList();
+            foreach (Predicate predicate in unVerified)
+            {
+                RemoveObservedPredicate(predicate);
+            }
+
+            return unVerified;
         }
     }
 

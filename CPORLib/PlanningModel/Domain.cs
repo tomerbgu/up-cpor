@@ -11,6 +11,7 @@ using CPORLib.FFCS;
 using CPORLib.LogicalUtilities;
 using CPORLib.Parsing;
 using CPORLib.Tools;
+using OfficeOpenXml.Drawing.Theme;
 using static CPORLib.Tools.Options;
 
 namespace CPORLib.PlanningModel
@@ -39,7 +40,7 @@ namespace CPORLib.PlanningModel
         private List<Tuple<ParametrizedAction, Formula, List<int>>> removedPreconditions;
         private List<int> alreadyAttemptedActions;
         public Dictionary<string, Formula> originalPreconditions { get; private set; }//action name -> preconditions
-        public HashSet<string> PreviouslyModifiedActions;
+        public List<string> PreviouslyModifiedActions;
 
         public Domain(string sName)
         {
@@ -62,7 +63,7 @@ namespace CPORLib.PlanningModel
             TypeHierarchy = new Dictionary<string, string>();
             removedPreconditions = new List<Tuple<ParametrizedAction, Formula, List<int>>>();
             alreadyAttemptedActions = Actions.Select((action, index) => new { action, index }).Where(ai => ai.action.Preconditions == null).Select(ai => ai.index).ToList();
-            PreviouslyModifiedActions = new HashSet<string>();
+            PreviouslyModifiedActions = new List<string>();
             originalPreconditions = new Dictionary<string, Formula>();
         }
 
@@ -111,7 +112,7 @@ namespace CPORLib.PlanningModel
             removedPreconditions = new List<Tuple<ParametrizedAction, Formula, List<int>>>();
             alreadyAttemptedActions = Actions.Select((action, index) => new { action, index }).Where(ai => ai.action.Preconditions == null).Select(ai => ai.index).ToList();
             //resetPreconditions();
-            PreviouslyModifiedActions = new HashSet<string>(d.PreviouslyModifiedActions);
+            PreviouslyModifiedActions = new List<string>(d.PreviouslyModifiedActions);
             FakePredicates = d.FakePredicates;
             ComputeAlwaysKnown();
         }
@@ -945,8 +946,19 @@ namespace CPORLib.PlanningModel
             return lActions;
         }
 
-        public List<PlanningAction> GetAllFakeActions()
+        public List<PlanningAction> GetAllMakeActions(List<CompoundFormula> allOneOfs)
         {
+            //GenericArraySet<Predicate> preds = new GenericArraySet<Predicate>();
+            //foreach (CompoundFormula oo in allOneOfs)
+            //    preds.UnionWith(oo.GetAllPredicates());
+            //GenericArraySet<string> predTypes = new GenericArraySet<string>(preds.Where(p => p is ParametrizedPredicate).Select(p => ((ParametrizedPredicate)p).Parameters.ElementAt(0).Type));
+
+            //foreach (Predicate p in preds)
+            //{
+            //    Predicate xPred = p.GetXorPredicate();
+            //    AddPredicate(xPred);
+            //}
+
             List<PlanningAction> lActions = new List<PlanningAction>();
             foreach (Predicate p in Uncertainties)
             {
@@ -964,6 +976,7 @@ namespace CPORLib.PlanningModel
                 //a.Preconditions = new CompoundFormula("and");
                 Predicate verified = p.CreateVerifiedPredicate();
                 a.AddPrecondition(verified.Negate());
+                //tomer todo a.AddPrecondition(p.GetXorPredicate().Negate());
                 //Predicate pKN = p.Clone();
                 a.AddPrecondition(p.Negate());
                 CompoundFormula andEffect = new CompoundFormula("and");
@@ -973,12 +986,26 @@ namespace CPORLib.PlanningModel
                     pp2.AddParameter(par);
                 }
                 andEffect.AddOperand(pp2);
-
+                //tomer todo AddWhenToAndEffect(allOneOfs, andEffect, p);
                 a.Effects = andEffect;
 
                 lActions.Add(a);
             }
             return lActions;
+        }
+
+        private void AddWhenToAndEffect(List<CompoundFormula> allOneOfs, CompoundFormula andEffect, Predicate originalPred)
+        {
+            CompoundFormula whenFormula;
+            foreach (CompoundFormula each in allOneOfs)
+            {
+                List<Predicate> formulaPredicates = each.GetAllPredicates().ToList();
+                if (formulaPredicates.Select(p => p.Name).Contains(originalPred.Name))
+                {
+                    whenFormula = new CompoundFormula("when");
+                    //whenFormula.AddOperand(formulaPredicates);
+                }
+            }
         }
 
         private List<PlanningAction> GetKnowledgeActionsNoState(StreamWriter sw, Dictionary<string, ISet<Predicate>> dTags, ISet<Predicate> lAdditionalPredicates)
@@ -3872,6 +3899,12 @@ namespace CPORLib.PlanningModel
 
         internal List<Predicate> OverspecifyPreconditions()
         {
+            //if we are in ALL case, don not necessarily add a precondition clause
+            if (Options.PredicateInaccuracy==PredicateInaccuracies.Both)
+                if (RandomGenerator.NextDouble() < Options.precondThreshold)
+                    return new List<Predicate>();
+
+
             int actionToOverSpecify = RandomGenerator.Next(Actions.Count);
             if (Name == "wumpus")
             {
@@ -3952,10 +3985,13 @@ namespace CPORLib.PlanningModel
                     }
 
                     string observations = aPar.Observe == null ? "" : aPar.Observe.ToString();
-                    addPrecond = addPrecond && !newPrecondition.ToString().Contains(predToAdd.ToString()) && !observations.Contains(predToAdd.ToString());
+                    addPrecond = !newPrecondition.ToString().Contains(predToAdd.ToString()) && !observations.Contains(predToAdd.ToString());
                     if (addPrecond)
                         break;
                 }
+                if (predToAdd != null && Options.UseFakePreds)
+                    AddUncertainty(predToAdd);
+
                 if (addPrecond)
                 {
                     newPrecondition.AddOperand(predToAdd);
@@ -4037,11 +4073,17 @@ namespace CPORLib.PlanningModel
         {
             return name.Split(Utilities.DELIMITER_CHAR[0])[0];
         }
+
+        private bool samePreconditions(PlanningAction a)
+        {
+            return !(((a.Preconditions == null) && (originalPreconditions[a.Name] == null)) || originalPreconditions[a.Name].Equals(a.Preconditions));
+        }
         private List<PlanningAction> GetRelevantActionModificationsOneAtATime(Dictionary<PlanningAction, float> precondStatistics, out string modifiedAction, bool forStatsOnly = false)
         {
             modifiedAction = null;
             List<PlanningAction> selectedActions = new List<PlanningAction>();
             PlanningAction aTag;
+
             var combosNotTried = precondStatistics.Where(entry => !PreviouslyModifiedActions.Contains(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0])).ToList();
             var actionsNotExhausted = combosNotTried.Where(entry => GetActionByName(getActionNameFromArray(entry.Key.Name)).Preconditions==null || char.IsDigit(getActionNameFromArray(entry.Key.Name)[getActionNameFromArray(entry.Key.Name).Length - 1])).ToList(); //todo this is necessary somewhere if we dont filter normal actions
             var entryWithMaxValue1 = actionsNotExhausted.OrderBy(entry => entry.Value).Reverse().FirstOrDefault();
@@ -4184,6 +4226,7 @@ namespace CPORLib.PlanningModel
             List<PlanningAction> deleteRelaxationActions = Actions.Where(a=> !a.Name.StartsWith("prepare-for-")).ToList(); //getDeleteRelaxationActions(); //Actions
             foreach (PlanningAction a in deleteRelaxationActions)
             {
+                //bool wasModified = samePreconditions(a);
                 a.Preconditions = originalPreconditions[a.Name];
                 if (a.Preconditions == null)
                 {
@@ -4331,10 +4374,53 @@ namespace CPORLib.PlanningModel
         private IEnumerable<PlanningAction> GetAllRelaxedActions(PartiallySpecifiedState pss, bool forStatsOnly=false)
         {
             List<PlanningAction> relaxedActions;
+            List<PlanningAction> deleteRelaxationActions = Actions.Where(a => !a.Name.StartsWith("prepare-for-")).ToList(); //getDeleteRelaxationActions(); //Actions
+            foreach (PlanningAction a in deleteRelaxationActions)
+            {
+                bool wasModified = samePreconditions(a);
+                if (wasModified)
+                {
+                    //ensure this is the last one in previously modified and remove it
+                    //if PreviouslyModifiedActions[PreviouslyModifiedActions.Count - 1]; todo
+
+                    PreviouslyModifiedActions.RemoveAt(PreviouslyModifiedActions.Count - 1);
+                }
+            }
             if (!Options.UseCosts || forStatsOnly)
             {
                 relaxedActions = GetActionsWOPrecondition();
-                return GroundAllRelaxedActions(pss, relaxedActions, true);
+                //todo will this fix maketrue
+                bool modifyProblemBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.Lazy && Options.PredicateInaccuracy==PredicateInaccuracies.Both;
+                //GenericArraySet<Predicate> origObserved = new GenericArraySet<Predicate>();
+                //BeliefState original = pss.m_bsInitialBelief.Clone();
+                //Problem oProb = pss.Problem;
+                //pss.Problem = new Problem(pss.Problem);
+                //foreach (Predicate pred in pss.Observed)
+                //{
+                //    origObserved.Add(pred.Clone());
+                //}
+                List<Predicate> unVerified = new List<Predicate>();
+                if (modifyProblemBeforeStateSelection)
+                {
+                    unVerified = pss.RemoveUnverifiedNegativeFacts();
+                    //    pss.m_bsInitialBelief.ModifyProblemBeforeStateSelection(pss);
+                    //    pss.m_lObserved = new GenericArraySet<Predicate>(pss.m_bsInitialBelief.Observed);
+                }
+                List<PlanningAction> res =  GroundAllRelaxedActions(pss, relaxedActions, true);
+                //not sure if i have to replace them bc it is the expanded state anyways
+                if (modifyProblemBeforeStateSelection)
+                {
+                    foreach (Predicate p in unVerified)
+                    {
+                        
+                        pss.AddObserved(p);
+                    }
+                    //    //i want to change back bc i'm assuming that even though there was a false negative most info is correct
+                    //    pss.Problem = oProb;
+                    //    pss.m_bsInitialBelief.m_lHiddenFormulas = original.Hidden;
+                    //    pss.m_lObserved = origObserved;
+                }
+                return res;
             }
             else
             {
@@ -4512,8 +4598,8 @@ namespace CPORLib.PlanningModel
             }
             else if (realModifiedAction!=null)
             {
-                if (!usedMakeActions)
-                    PreviouslyModifiedActions.Add(realModifiedAction);
+                //if (!usedMakeActions)
+                //    PreviouslyModifiedActions.Add(realModifiedAction);
                 if (Options.Verbose)
                     Console.WriteLine("----" + realModifiedAction + "----");
              
@@ -4589,7 +4675,7 @@ namespace CPORLib.PlanningModel
             {
                 Predicate fp = new ParametrizedPredicate("fakePredicate-" + i);
                 FakePredicates.Add(fp);
-                AddUncertainty(fp);
+                //AddUncertainty(fp);
             }
         }
     }

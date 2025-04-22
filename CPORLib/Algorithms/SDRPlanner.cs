@@ -40,10 +40,10 @@ namespace CPORLib.Algorithms
             {
                 OverSpecifyPreconds();
             }
-            else
-            {
-                Domain.resetPreconditions();
-            }
+            //else
+            //{
+            Domain.resetPreconditions();
+            //}
             //end part
 
             //Problem = new Problem(problem);
