@@ -4030,7 +4030,7 @@ namespace CPORLib.PlanningModel
                     }
 
                     string observations = aPar.Observe == null ? "" : aPar.Observe.ToString();
-                    addPrecond = !newPrecondition.ToString().Contains(predToAdd.ToString()) && !observations.Contains(predToAdd.ToString());
+                    addPrecond = addPrecond && !newPrecondition.ToString().Contains(predToAdd.ToString()) && !observations.Contains(predToAdd.ToString());
                     if (addPrecond)
                         break;
                 }
