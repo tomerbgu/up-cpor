@@ -921,6 +921,10 @@ namespace CPORLib.PlanningModel
                     {
                         a.Effects = ((CompoundFormula)a.Effects).RemovePredicates(new HashSet<Predicate> { p });
                     }
+                    if (a.Preconditions is CompoundFormula)
+                    {
+                        a.Preconditions = ((CompoundFormula)a.Preconditions).RemovePredicates(new HashSet<Predicate> { p });
+                    }
                 }
             }
         }
@@ -951,15 +955,51 @@ namespace CPORLib.PlanningModel
             //GenericArraySet<Predicate> preds = new GenericArraySet<Predicate>();
             //foreach (CompoundFormula oo in allOneOfs)
             //    preds.UnionWith(oo.GetAllPredicates());
-            //GenericArraySet<string> predTypes = new GenericArraySet<string>(preds.Where(p => p is ParametrizedPredicate).Select(p => ((ParametrizedPredicate)p).Parameters.ElementAt(0).Type));
 
-            //foreach (Predicate p in preds)
-            //{
-            //    Predicate xPred = p.GetXorPredicate();
-            //    AddPredicate(xPred);
-            //}
+            //Predicate xPred = preds.ElementAt(0).GetXorPredicate();
+            //ParametrizedPredicate xor = new ParametrizedPredicate(xPred.Name);
+            //xor.AddParameter(new Parameter(((GroundedPredicate)xPred).Constants[0].Type, "i"));
+            ////AddPredicate(xor);
+
+            //Predicate moPred = preds.ElementAt(0).GetMOPredicate();
+            //ParametrizedPredicate mo = new ParametrizedPredicate(moPred.Name);
+            //mo.AddParameter(new Parameter(((GroundedPredicate)moPred).Constants[0].Type, "i"));
+            //AddPredicate(mo);
+
+            Predicate wip = new GroundedPredicate("WIP");
+            //AddPredicate(wip);
+            foreach(PlanningAction a in Actions)
+            {
+                a.AddPrecondition(wip.Negate());
+            }
+
+
+            PlanningAction pa = new PlanningAction("wipAction");
+            pa.AddPrecondition(wip);
+            CompoundFormula effectFormula = new CompoundFormula("and");
+            effectFormula.AddOperand(wip.Negate());
+            CompoundFormula whenFormula;
+            CompoundFormula andFormula;
+            foreach (CompoundFormula cf in allOneOfs) {
+                ISet<Predicate> ps = cf.GetAllPredicates();
+                foreach (Predicate p in ps)
+                {
+                    whenFormula = new CompoundFormula("when");
+                    whenFormula.AddOperand(p.GetMOPredicate());
+                    andFormula = new CompoundFormula("and");
+                    foreach (Predicate p2 in ps)
+                    {
+                        andFormula.AddOperand(p2.GetXorPredicate());
+                    }
+                    whenFormula.AddOperand(andFormula);
+                    effectFormula.AddOperand(whenFormula);
+                }
+            }
+            pa.Effects = effectFormula;
 
             List<PlanningAction> lActions = new List<PlanningAction>();
+            lActions.Add(pa);
+
             foreach (Predicate p in Uncertainties)
             {
                 ParametrizedAction a = new ParametrizedAction("Make:" + p.Name);
@@ -973,20 +1013,25 @@ namespace CPORLib.PlanningModel
                 }
                 else
                     throw new Exception();
-                //a.Preconditions = new CompoundFormula("and");
+
                 Predicate verified = p.CreateVerifiedPredicate();
                 a.AddPrecondition(verified.Negate());
-                //tomer todo a.AddPrecondition(p.GetXorPredicate().Negate());
-                //Predicate pKN = p.Clone();
+                a.AddPrecondition(p.GetXorPredicate().Negate());
                 a.AddPrecondition(p.Negate());
+                a.AddPrecondition(wip.Negate());
+
                 CompoundFormula andEffect = new CompoundFormula("and");
                 ParametrizedPredicate pp2 = new ParametrizedPredicate(p.Name);
+                ParametrizedPredicate mo2 = new ParametrizedPredicate("mo-"+p.Name);
                 foreach (Parameter par in a.Parameters)
                 {
                     pp2.AddParameter(par);
+                    mo2.AddParameter(par);
                 }
+
                 andEffect.AddOperand(pp2);
-                //tomer todo AddWhenToAndEffect(allOneOfs, andEffect, p);
+                andEffect.AddOperand(mo2);
+                andEffect.AddOperand(wip);
                 a.Effects = andEffect;
 
                 lActions.Add(a);

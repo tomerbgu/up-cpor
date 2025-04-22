@@ -181,5 +181,21 @@ namespace CPORLib.LogicalUtilities
             vPred.Name = "verified-" + vPred.Name;
             return vPred;
         }
+
+        public Predicate GetXorPredicate()
+        {
+            Predicate vPred = Clone();
+            vPred.Negation = false;
+            vPred.Name = "xor-" + vPred.Name;
+            return vPred;
+        }
+
+        public Predicate GetMOPredicate()
+        {
+            Predicate vPred = Clone();
+            vPred.Negation = false;
+            vPred.Name = "mo-" + vPred.Name;
+            return vPred;
+        }
     }
 }

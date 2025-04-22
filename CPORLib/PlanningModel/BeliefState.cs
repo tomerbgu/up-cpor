@@ -7,6 +7,7 @@ using Microsoft.SolverFoundation.Solvers;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -1512,13 +1513,13 @@ namespace CPORLib.PlanningModel
             {
                 lHidden.Add(new PredicateFormula(p));
             }
-           //bool bValid1 = ApplyUnitPropogation(lHidden, lAssignment);
-           // if (!bValid1)
-           // {
-           //     Console.WriteLine("Problem with unit propogation while choosing hidden predicates");
-           //     //throw new Exception("Problem with unit propogation while choosing hidden predicates");
+           bool bValid1 = ApplyUnitPropogation(lHidden, lAssignment);
+            if (!bValid1)
+            {
+                Console.WriteLine("Problem with unit propogation while choosing hidden predicates");
+                //throw new Exception("Problem with unit propogation while choosing hidden predicates");
 
-           // }
+            }
             while (lUnknown.Count > 0)
             {
                 bool bAllTrue = false, bAllFalse = false;
@@ -1988,7 +1989,27 @@ namespace CPORLib.PlanningModel
         {
             foreach (Predicate p in Problem.Domain.Uncertainties) {
                 Problem.Domain.AddPredicate(p.CreateVerifiedPredicate());
+
+                //Predicate xPred = p.GetXorPredicate();
+                //ParametrizedPredicate xor = new ParametrizedPredicate(xPred.Name);
+                //xor.AddParameter(new Parameter(((GroundedPredicate)xPred).Constants[0].Type, "i"));
+                Problem.Domain.AddPredicate(p.GetXorPredicate());
+
+                //Predicate moPred = p.GetMOPredicate();
+                //ParametrizedPredicate mo = new ParametrizedPredicate(moPred.Name);
+                //mo.AddParameter(new Parameter(((GroundedPredicate)moPred).Constants[0].Type, "i"));
+                Problem.Domain.AddPredicate(p.GetMOPredicate());
             }
+
+            //GenericArraySet<Predicate> preds = new GenericArraySet<Predicate>(new GroundedPredicate();
+            //foreach (CompoundFormula oo in allOneOfs)
+            //    preds.UnionWith(oo.GetAllPredicates());
+
+            
+
+            Predicate wip = new GroundedPredicate("WIP");
+            Problem.Domain.AddPredicate(wip);
+
             foreach (PlanningAction a in Problem.Domain.Actions)
             {
                 foreach (Predicate p in Problem.Domain.Uncertainties)
@@ -2062,8 +2083,8 @@ namespace CPORLib.PlanningModel
 
         private List<CompoundFormula> HandleOneOf()
         {
-            return null;
-            List<CompoundFormula> allOneOfs = Hidden.Where(cf => cf.IsSimpleOneOf()).ToList();
+            //return null;
+            List<CompoundFormula> allOneOfs = Hidden.Where(cf => cf != null && cf.IsSimpleOneOf()).ToList();
             
             return allOneOfs;
         }

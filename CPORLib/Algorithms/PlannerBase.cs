@@ -588,15 +588,11 @@ namespace CPORLib.Algorithms
         private string prevModifiedAction;
         private void resetModifiedPredicates(PartiallySpecifiedState pss, string modifiedAction)
         {
-            //if (!modifiedAction.Equals(prevModifiedAction))
-            //{
             foreach (Predicate p in modifiedPredicates)
             {
                 if (!pss.Verified.Contains(p) && !pss.Verified.Contains(p.Negate()))
                     pss.AddObserved(p);
             }
-                
-            //}
             modifiedPredicates = new HashSet<Predicate>();
         }
 
@@ -660,7 +656,15 @@ namespace CPORLib.Algorithms
                 {
                     Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
                     pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
+
+                    Problem.Domain.RemoveFakePredicate(p.GetMOPredicate());
+                    pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(p.GetMOPredicate());
+
+                    Problem.Domain.RemoveFakePredicate(p.GetXorPredicate());
+                    pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(p.GetXorPredicate());
                 }
+                Problem.Domain.RemoveFakePredicate(new GroundedPredicate("WIP"));
+                pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(new GroundedPredicate("WIP"));
             }
             return makeActions > 0;
         }
@@ -825,13 +829,18 @@ namespace CPORLib.Algorithms
             foreach (Predicate p in Problem.Domain.Uncertainties)
             {
                 Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
-                //pssCurrent.Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
+                Problem.Domain.RemoveFakePredicate(p.GetMOPredicate());
+                Problem.Domain.RemoveFakePredicate(p.GetXorPredicate());
+
             }
+            Problem.Domain.RemoveFakePredicate(new GroundedPredicate("WIP"));
+
             List<PlanningAction> actionsToRemove = new List<PlanningAction>();
             foreach (PlanningAction pa in Problem.Domain.Actions)
             {
-                if (pa.Name.StartsWith("Make:"))
+                if (pa.Name.StartsWith("Make:") || pa.Name.StartsWith("wip"))
                     actionsToRemove.Add(pa);
+                //pa.Preconditions = ((CompoundFormula)pa.Preconditions).RemovePredicates(new HashSet<Predicate>(){ new GroundedPredicate("WIP").Negate() });
             }
             foreach (PlanningAction pa in actionsToRemove)
             {
