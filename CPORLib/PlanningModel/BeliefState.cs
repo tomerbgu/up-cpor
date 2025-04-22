@@ -1833,11 +1833,6 @@ namespace CPORLib.PlanningModel
             bool modifyGoal = oldPlan != null;
             if (falseNegatives || modifyGoal)
             {
-                modifyDomainBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.MakeTrue && !modifyGoal;
-                original = Clone();
-                if (modifyDomainBeforeStateSelection)
-                    lFakeActions = ModifyDomainBeforeStateSelection(true);
-                modifyProblemBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.Lazy;
                 original = Clone();
                 oProb = Problem;
                 Problem = new Problem(Problem);
@@ -1846,6 +1841,11 @@ namespace CPORLib.PlanningModel
                     origObserved.Add(pred.Clone());
                 }
 
+                modifyDomainBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.MakeTrue && !modifyGoal;
+                if (modifyDomainBeforeStateSelection)
+                    lFakeActions = ModifyDomainBeforeStateSelection(true);
+                modifyProblemBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.Lazy;
+                
                 if (modifyProblemBeforeStateSelection)
                 {
                     ModifyProblemBeforeStateSelection(pssCurrent);
