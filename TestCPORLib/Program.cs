@@ -13,7 +13,7 @@ using static CPORLib.Tools.RandomGenerator;
 public class Program
 {
     static bool canOverride = true;
-    public static async Task RunTest(string sName, bool bOnline, string sTestPath)
+    public static async Task RunTest(string sName, bool bOnline, string sTestPath, bool op=false)
     {
         
         string sPath = sTestPath + sName;
@@ -59,9 +59,8 @@ public class Program
             List<ExecutionData> ED = new List<ExecutionData>();
             TimeSpan totalTime = TimeSpan.Zero;
             //bool TimeOutFlag = false;
-            bool op = Options.OverspecifiedPreconditions && Options.PredicateInaccuracy == PredicateInaccuracies.Neither;
             int numIterations = op ? Options.MaxIterations : Options.Iterations;
-            for (int i = 0; i < numIterations; i++)
+            for (int i = 0; i < numIterations && ED.Count<Options.Iterations; i++)
             {
                 //TimeOutFlag = false;
                 SetRandomSeed(i, seeds, NoDeadends);
@@ -71,7 +70,7 @@ public class Program
                     //RandomGenerator.Init(538); 
                     //RandomGenerator.Init(218);
                     //RandomGenerator.Init(424);
-                    RandomGenerator.Init(182);
+                    RandomGenerator.Init(523);
                     Console.WriteLine();
                 }
 
@@ -118,12 +117,12 @@ public class Program
                 {
                     if (res.ReplanningCount > 0)
                     {
-                        Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
+                        Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}, {i + 1} trials");
                         ED.Add(res); //this is here bc it makes more sense for replanning
                     }
                     else
                     {
-                        Console.WriteLine("No failures, not counting instance");
+                        Console.WriteLine("No deadends, not counting instance");
                     }
                     //Console.WriteLine($"Success #{ED.Count}/{Options.Iterations}");
                 }
@@ -154,7 +153,7 @@ public class Program
                 ExcelHelper.writeSummary(folderPath, ED, TimeSpan.FromTicks(totalTime.Ticks / ED.Count), setting.ToString());
             }
         }
-        ExcelHelper.WriteToExcel(folderPath, genPath, ExecutionData, seedSet, settings);
+        ExcelHelper.WriteToExcel(folderPath, genPath, ExecutionData, seedSet, settings, op);
     }
 
     
@@ -172,7 +171,7 @@ public class Program
                 settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLPessimistic, true, 1, false, 0.2));
                 settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, false, 0.2));
                 
-                if (Options.PredicateInaccuracy != PredicateInaccuracies.FalsePositive)
+                if (Options.PredicateInaccuracy == PredicateInaccuracies.FalseNegative)
                     settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, false, 0.2));
             }
             else
@@ -212,45 +211,14 @@ public class Program
             settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, false, 0.0));
             settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, false, 0.0));
 
-            Options.SolveBothSequentially = true;
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, false, 0.0));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, false, 0.0));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 5, false, 0.0));
-            settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 20, false, 0.0));
+            //Options.SolveBothSequentially = true;
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, false, 0, false, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, false, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, false, 0.0));
+            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, false, 0.0));
 
-            
-
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false, 0, true, 0.0));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, true, 1, true, 0.0));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, true, 0.0));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, true, 0.0));
-
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, false, 0, true, 0.2));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, true, 0.2));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, true, 0.2));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, true, 0.2));
-
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, false, 0, true, 0.5));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, true, 0.5));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, true, 0.5));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, true, 0.5));
-
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, false, 0, true, 0.8));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 1, true, 0.8));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 5, true, 0.8));
-            //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Lazy, true, 20, true, 0.8));
         }
-        //mixes
-        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, false, 1, true, 0.0));
-        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, false, 1, false, 0.0));
-        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, true, 1, true, 0.0));
-        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, true, 1, false, 0.0));
 
-
-        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BL0, false));
-        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.BLOptimistic, false));
-        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.MakeTrue, false));
-        //settings.Add(Tuple.Create(InaccuracyHandlingStrategies.Baseline, false));
 
 
     }
@@ -333,10 +301,10 @@ public class Program
         //RunTest("colorballs11-1", bOnline, sPath);
         //RunTest("colorballs11-2", bOnline, sPath);
 
-        RunTest("unix2", bOnline, sPath);
+        //RunTest("unix2", bOnline, sPath);
         //RunTest("unix3", bOnline, sPath);
-
-        //RunTest("doors9", bOnline, sPath);
+        //RunTest("doors5", bOnline, sPath);
+        RunTest("doors9", bOnline, sPath);
         //RunTest("doors13", bOnline, sPath);
         //RunTest("doors15", bOnline, sPath);
         //RunTest("colorballs2-2", bOnline, sPath);
@@ -358,8 +326,8 @@ public class Program
     public static void Main(string[] args)
     {
         FFUtilities.Verbose = false;
-        TestAll(true);
-        return;
+        //TestAll(true);
+        //return;
         canOverride = false;
         Options.OverspecifiedPreconditions = false;
         Options.PredicateInaccuracy = Options.PredicateInaccuracies.Neither;
@@ -369,6 +337,7 @@ public class Program
         }
         else
         {
+
             if (args.Length > 1)
             {
                 string literalInaccuacies = args[1];
@@ -399,8 +368,10 @@ public class Program
             {
                 double.TryParse(args[2], out Options.threshold);
             }
-
-            _ = RunTest(args[0], true, @"Tests/");
+            bool op = Options.OverspecifiedPreconditions && Options.PredicateInaccuracy == PredicateInaccuracies.Neither;
+            _ = RunTest(args[0], true, @"Tests/", op);
+            if (Options.PredicateInaccuracy == Options.PredicateInaccuracies.FalseNegative)
+                _ = RunTest(args[0], true, @"Tests/", true);
             return;
         }
     }

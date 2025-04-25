@@ -910,7 +910,7 @@ namespace CPORLib.PlanningModel
             sw.WriteLine();
         }
 
-        public void RemoveFakePredicate(Predicate p)
+        public bool RemoveFakePredicate(Predicate p)
         {
             bool found = Predicates.Remove(p);
             if (found)
@@ -927,6 +927,7 @@ namespace CPORLib.PlanningModel
                     }
                 }
             }
+            return found;
         }
         public List<PlanningAction> GetAllKnowledgeActions(Dictionary<string, ISet<Predicate>> dTags)
         {
@@ -937,6 +938,15 @@ namespace CPORLib.PlanningModel
                 {
                     PlanningAction aObserveTrue = a.NonConditionalObservationTranslation(dTags, m_lAlwaysKnown, true);
                     PlanningAction aObserveFalse = a.NonConditionalObservationTranslation(dTags, m_lAlwaysKnown, false);
+
+                    foreach (Predicate p in a.Observe.GetAllPredicates()) {
+                        Predicate pVer = p.CreateVerifiedPredicate();
+                        if (Predicates.Contains(pVer))
+                        {
+                            aObserveTrue.AddEffect(pVer);
+                            aObserveFalse.AddEffect(pVer);
+                        }
+                    }
                     lActions.Add(aObserveTrue);
                     lActions.Add(aObserveFalse);
                 }
@@ -952,57 +962,57 @@ namespace CPORLib.PlanningModel
 
         public List<PlanningAction> GetAllMakeActions(List<CompoundFormula> allOneOfs)
         {
-            //GenericArraySet<Predicate> preds = new GenericArraySet<Predicate>();
-            //foreach (CompoundFormula oo in allOneOfs)
-            //    preds.UnionWith(oo.GetAllPredicates());
-
-            //Predicate xPred = preds.ElementAt(0).GetXorPredicate();
-            //ParametrizedPredicate xor = new ParametrizedPredicate(xPred.Name);
-            //xor.AddParameter(new Parameter(((GroundedPredicate)xPred).Constants[0].Type, "i"));
-            ////AddPredicate(xor);
-
-            //Predicate moPred = preds.ElementAt(0).GetMOPredicate();
-            //ParametrizedPredicate mo = new ParametrizedPredicate(moPred.Name);
-            //mo.AddParameter(new Parameter(((GroundedPredicate)moPred).Constants[0].Type, "i"));
-            //AddPredicate(mo);
-
-            Predicate wip = new GroundedPredicate("WIP");
-            //AddPredicate(wip);
-            foreach(PlanningAction a in Actions)
-            {
-                a.AddPrecondition(wip.Negate());
-            }
-
-
-            PlanningAction pa = new PlanningAction("wipAction");
-            pa.AddPrecondition(wip);
-            CompoundFormula effectFormula = new CompoundFormula("and");
-            effectFormula.AddOperand(wip.Negate());
-            CompoundFormula whenFormula;
-            CompoundFormula andFormula;
-            foreach (CompoundFormula cf in allOneOfs) {
-                ISet<Predicate> ps = cf.GetAllPredicates();
-                foreach (Predicate p in ps)
-                {
-                    whenFormula = new CompoundFormula("when");
-                    whenFormula.AddOperand(p.GetMOPredicate());
-                    andFormula = new CompoundFormula("and");
-                    foreach (Predicate p2 in ps)
-                    {
-                        andFormula.AddOperand(p2.GetXorPredicate());
-                    }
-                    whenFormula.AddOperand(andFormula);
-                    effectFormula.AddOperand(whenFormula);
-                }
-            }
-            pa.Effects = effectFormula;
-
             List<PlanningAction> lActions = new List<PlanningAction>();
-            lActions.Add(pa);
 
-            foreach (Predicate p in Uncertainties)
+            foreach (Predicate p in Uncertainties) 
             {
-                ParametrizedAction a = new ParametrizedAction("Make:" + p.Name);
+                ParametrizedAction a;
+                Predicate verified;
+                CompoundFormula andEffect;
+                ParametrizedPredicate pp2;
+                List<Predicate> xPreds = new List<Predicate>();
+                for (int i = 0; i < allOneOfs.Count; i++)
+                {
+                    Predicate xPred = p.GetXorPredicate(i);
+                    xPreds.Add(xPred);
+                    AddPredicate(xPred);
+
+                    Predicate undone = new GroundedPredicate($"make-true_{i}");
+                    AddPredicate(undone);
+
+                    a = new ParametrizedAction($"Make:_{i}_ " + p.Name);
+                    if (p is ParametrizedPredicate)
+                    {
+                        ParametrizedPredicate pp = (ParametrizedPredicate)p;
+                        foreach (Parameter par in pp.Parameters)
+                        {
+                            a.AddParameter(par);
+                        }
+                    }
+                    else
+                        throw new Exception();
+
+                    verified = p.CreateVerifiedPredicate();
+                    a.AddPrecondition(verified.Negate());
+                    a.AddPrecondition(p.Negate());
+                    a.AddPrecondition(undone.Negate());
+                    a.AddPrecondition(xPred);
+
+                    andEffect = new CompoundFormula("and");
+                    pp2 = new ParametrizedPredicate(p.Name);
+                    foreach (Parameter par in a.Parameters)
+                    {
+                        pp2.AddParameter(par);
+                    }
+
+                    andEffect.AddOperand(pp2);
+                    andEffect.AddOperand(undone);
+                    a.Effects = andEffect;
+
+                    lActions.Add(a);
+                }
+
+                a = new ParametrizedAction($"Make: " + p.Name);
                 if (p is ParametrizedPredicate)
                 {
                     ParametrizedPredicate pp = (ParametrizedPredicate)p;
@@ -1014,26 +1024,20 @@ namespace CPORLib.PlanningModel
                 else
                     throw new Exception();
 
-                Predicate verified = p.CreateVerifiedPredicate();
+                verified = p.CreateVerifiedPredicate();
                 a.AddPrecondition(verified.Negate());
-                a.AddPrecondition(p.GetXorPredicate().Negate());
                 a.AddPrecondition(p.Negate());
-                a.AddPrecondition(wip.Negate());
+                foreach (Predicate xPredicate in xPreds)
+                    a.AddPrecondition(xPredicate.Negate());
 
-                CompoundFormula andEffect = new CompoundFormula("and");
-                ParametrizedPredicate pp2 = new ParametrizedPredicate(p.Name);
-                ParametrizedPredicate mo2 = new ParametrizedPredicate("mo-"+p.Name);
+                andEffect = new CompoundFormula("and");
+                pp2 = new ParametrizedPredicate(p.Name);
                 foreach (Parameter par in a.Parameters)
                 {
                     pp2.AddParameter(par);
-                    mo2.AddParameter(par);
                 }
-
                 andEffect.AddOperand(pp2);
-                andEffect.AddOperand(mo2);
-                andEffect.AddOperand(wip);
                 a.Effects = andEffect;
-
                 lActions.Add(a);
             }
             return lActions;

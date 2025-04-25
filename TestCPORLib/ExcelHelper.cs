@@ -97,10 +97,10 @@ namespace RunCPOR
         }
 
         static string plusMinus = "±";
-        public static void WriteToExcel(string folderPath, string sTestPath, List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> EDList, HashSet<int> seedSet, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>> settings)
+        public static void WriteToExcel(string folderPath, string sTestPath, List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> EDList, HashSet<int> seedSet, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>> settings, bool op)
         {
-            string[] filePaths = {folderPath + $"/output_summary_{DateTime.Now.ToString("MM_dd_HHmmss")}_{Options.PredicateInaccuracy}_{Options.OverspecifiedPreconditions}.xlsx",
-                sTestPath + $"/output_summary_{DateTime.Now.ToString("MM_dd_HHmmss")}_{Options.PredicateInaccuracy}_{Options.OverspecifiedPreconditions}.xlsx" };
+            string[] filePaths = {folderPath + $"/output_summary_{DateTime.Now.ToString("MM_dd_HHmmss")}_{Options.PredicateInaccuracy}_{Options.OverspecifiedPreconditions}_{Options.threshold}_{op}.xlsx",
+                sTestPath + $"/output_summary_{DateTime.Now.ToString("MM_dd_HHmmss")}_{Options.PredicateInaccuracy}_{Options.OverspecifiedPreconditions}_{Options.threshold}_{op}.xlsx" };
             string problemName = EDList[0].Item1[0].Problem.Name;
             int count = Options.Iterations;
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
@@ -208,6 +208,7 @@ namespace RunCPOR
                 {
                     ExecutionData ed = ED[i];
                     writer.WriteLine($"{i}:");
+                    writer.WriteLine($"Seed: {ed.Seed}");
                     writer.WriteLine($"Time: {ed.Time.TotalMinutes:00}:{ed.Time.Seconds:00}.{ed.Time.Milliseconds:000}");
                     writer.WriteLine($"Number of Negations: {ed.NumberOfNegations}");
                     writer.WriteLine($"Number of actions: {ed.Actions}");

@@ -1513,13 +1513,13 @@ namespace CPORLib.PlanningModel
             {
                 lHidden.Add(new PredicateFormula(p));
             }
-           bool bValid1 = ApplyUnitPropogation(lHidden, lAssignment);
-            if (!bValid1)
-            {
-                Console.WriteLine("Problem with unit propogation while choosing hidden predicates");
-                //throw new Exception("Problem with unit propogation while choosing hidden predicates");
+            //bool bValid1 = ApplyUnitPropogation(lHidden, lAssignment);
+            //if (!bValid1)
+            //{
+            //    Console.WriteLine("Problem with unit propogation while choosing hidden predicates");
+            //    //throw new Exception("Problem with unit propogation while choosing hidden predicates");
 
-            }
+            //}
             while (lUnknown.Count > 0)
             {
                 bool bAllTrue = false, bAllFalse = false;
@@ -1843,7 +1843,9 @@ namespace CPORLib.PlanningModel
 
                 modifyDomainBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.MakeTrue && !modifyGoal;
                 if (modifyDomainBeforeStateSelection)
+                {
                     lFakeActions = ModifyDomainBeforeStateSelection(true);
+                }
                 modifyProblemBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.Lazy;
                 
                 if (modifyProblemBeforeStateSelection)
@@ -1864,14 +1866,15 @@ namespace CPORLib.PlanningModel
                 CompoundFormula modifiedGoalCF = (CompoundFormula)modifiedGoal;
                 foreach (string newGoal in oldPlan.Where(s => s.StartsWith("Make:")))
                 {
-                    string pred = newGoal.Replace("Make:", "");
-                    String[] vars = pred.Split(' ');
-                    ParametrizedPredicate pp = (ParametrizedPredicate)Problem.Domain.Predicates.FirstOrDefault(obj => obj.Name == vars[0]).Clone();
+                    string[] a = Utilities.SplitString(newGoal, ' ');
+                    //string pred = string.Join(" ", a.Skip(1));
+                    //String[] vars = a.Skip(1);
+                    ParametrizedPredicate pp = (ParametrizedPredicate)Problem.Domain.Predicates.FirstOrDefault(obj => obj.Name == a[1]).Clone();
                     GroundedPredicate newGrounded = new GroundedPredicate(pp.Name);
                     int i = 1;
                     foreach (Parameter p in pp.Parameters)
                     {
-                        newGrounded.AddConstant(new Constant(p.Type, vars[i]));
+                        newGrounded.AddConstant(new Constant(p.Type, a[i+1]));
                         i++;
                     }
                     makeTruePredicates.Add(newGrounded);
@@ -1902,7 +1905,7 @@ namespace CPORLib.PlanningModel
 
             if (falseNegatives)
             {
-                if (modifyProblemBeforeStateSelection)
+                if (modifyProblemBeforeStateSelection || modifyDomainBeforeStateSelection)
                 {
                     //i want to change back bc i'm assuming that even though there was a false negative most info is correct
                     Problem = oProb;
@@ -1988,39 +1991,15 @@ namespace CPORLib.PlanningModel
         private List<PlanningAction> ModifyDomainBeforeStateSelection(bool addActions)
         {
             
-            List<Predicate> pToAdd = new List<Predicate>();
-            foreach (Predicate p in Problem.Domain.Predicates)
-            {
-                //Predicate xPred = p.GetXorPredicate();
-                //ParametrizedPredicate xor = new ParametrizedPredicate(xPred.Name);
-                //xor.AddParameter(new Parameter(((GroundedPredicate)xPred).Constants[0].Type, "i"));
-                pToAdd.Add(p.GetXorPredicate());
-
-                //Predicate moPred = p.GetMOPredicate();
-                //ParametrizedPredicate mo = new ParametrizedPredicate(moPred.Name);
-                //mo.AddParameter(new Parameter(((GroundedPredicate)moPred).Constants[0].Type, "i"));
-                pToAdd.Add(p.GetMOPredicate());
-            }
-            foreach (Predicate p in pToAdd)
-            {
-                Problem.Domain.AddPredicate(p);
-            }
             foreach (Predicate p in Problem.Domain.Uncertainties)
             {
                 Problem.Domain.AddPredicate(p.CreateVerifiedPredicate());
             }
 
-
-
-            Predicate wip = new GroundedPredicate("WIP");
-            Problem.Domain.AddPredicate(wip);
-
             foreach (PlanningAction a in Problem.Domain.Actions)
             {
                 foreach (Predicate p in Problem.Domain.Uncertainties)
                 {
-                    //TODO when is this relevant? -Go through all preconditions, effects, and observations.
-                    //ParametrizedAction aParam = (ParametrizedAction)a;
                     if (a.Effects != null)
                     {
                         foreach (Predicate pEffect in a.Effects.GetAllPredicates())
@@ -2028,8 +2007,6 @@ namespace CPORLib.PlanningModel
                             if (p.Name == pEffect.Name)
                             {
                                 Predicate verified = pEffect.CreateVerifiedPredicate();
-
-                                //verified.AddParameter(aParam.Parameters[aParam.Parameters.Count() - 1].Name, "pos");
                                 if (a.Effects == null)
                                 {
                                     a.Effects = new CompoundFormula("and");
@@ -2045,25 +2022,6 @@ namespace CPORLib.PlanningModel
                             if (p.Name == pEffect.Name)
                             {
                                 Predicate verified = pEffect.CreateVerifiedPredicate();
-
-                                //verified.AddParameter(aParam.Parameters[aParam.Parameters.Count() - 1].Name, "pos");
-                                if (a.Effects == null)
-                                {
-                                    a.Effects = new CompoundFormula("and");
-                                }
-                                a.AddEffect(verified);
-                            }
-                        }
-                    }
-                    if (a.Observe != null)
-                    {
-                        foreach (Predicate pEffect in a.Observe.GetAllPredicates())
-                        {
-                            if (p.Name == pEffect.Name)
-                            {
-                                Predicate verified = pEffect.CreateVerifiedPredicate();
-
-                                //verified.AddParameter(aParam.Parameters[aParam.Parameters.Count() - 1].Name, "pos");
                                 if (a.Effects == null)
                                 {
                                     a.Effects = new CompoundFormula("and");
@@ -2081,6 +2039,17 @@ namespace CPORLib.PlanningModel
                 List<PlanningAction> lFakeActions = Problem.Domain.GetAllMakeActions(oneOfs);
                 foreach (PlanningAction a in lFakeActions)
                     Problem.Domain.AddAction(a);
+
+                for (int i = 0; i < oneOfs.Count; i++)
+                {
+                    foreach (Predicate p in oneOfs[i].GetAllPredicates())
+                    {
+                        Predicate xPred = p.GetXorPredicate(i);
+                        Observed.Add(xPred);
+                        Problem.Known.Add(xPred);
+                    }
+                }
+
                 return lFakeActions;
             }
             return null;

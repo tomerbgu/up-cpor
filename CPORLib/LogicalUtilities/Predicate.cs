@@ -182,20 +182,20 @@ namespace CPORLib.LogicalUtilities
             return vPred;
         }
 
-        public Predicate GetXorPredicate()
+        public Predicate GetXorPredicate(int i)
         {
             Predicate vPred = Clone();
             vPred.Negation = false;
-            vPred.Name = "xor-" + vPred.Name;
+            vPred.Name = $"belongs_to_xor-{vPred.Name}_{i}";
             return vPred;
         }
 
-        public Predicate GetMOPredicate()
-        {
-            Predicate vPred = Clone();
-            vPred.Negation = false;
-            vPred.Name = "mo-" + vPred.Name;
-            return vPred;
-        }
+        //public Predicate GetMOPredicate()
+        //{
+        //    Predicate vPred = Clone();
+        //    vPred.Negation = false;
+        //    vPred.Name = "mo-" + vPred.Name;
+        //    return vPred;
+        //}
     }
 }

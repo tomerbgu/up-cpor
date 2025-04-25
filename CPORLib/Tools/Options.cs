@@ -17,12 +17,12 @@ namespace CPORLib.Tools
         //Pessimistic -> change each possible uncertainty as unknown
         //Pessimistic -> change each possible uncertainty as true
         public enum InaccuracyHandlingStrategies { BLPessimistic, BLOptimistic, Lazy, MakeTrue };
-        public static InaccuracyHandlingStrategies InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.Lazy;
+        public static InaccuracyHandlingStrategies InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.MakeTrue;
         public enum PredicateInaccuracies { FalsePositive, FalseNegative, Both, Neither }
-        public static PredicateInaccuracies PredicateInaccuracy = PredicateInaccuracies.Both; 
+        public static PredicateInaccuracies PredicateInaccuracy = PredicateInaccuracies.FalseNegative; 
 
-        public static bool OverspecifiedPreconditions = true;
-        public static bool SolveBothSequentially = true;
+        public static bool OverspecifiedPreconditions = false;
+        public static bool SolveBothSequentially = false;
         public static bool AllowMultipleOverSpecifications = false;
         public static bool FixOneAtATime = true; //for overspecified preconditions
         public static bool UseCosts = true;
@@ -34,8 +34,8 @@ namespace CPORLib.Tools
         public static bool Verbose = false;
         public static double threshold = 0.2;
         public static double precondThreshold = 0.5;
-        public static int Iterations = 1;
-        public static int MaxIterations = 100;
+        public static int Iterations = 50;
+        public static int MaxIterations = 500;
         public static int MaxTime = 600;
         public static int Factor = 3;
 

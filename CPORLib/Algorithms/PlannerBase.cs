@@ -613,10 +613,10 @@ namespace CPORLib.Algorithms
                     if (Options.Verbose)
                         Console.WriteLine(s);
 
-                    string[] pString = Utilities.SplitString(s.Substring(5), ' ');
-                    ParametrizedPredicate p = (ParametrizedPredicate)Domain.Predicates.First(pp => pp.Name == pString[0]);
+                    string[] pString = Utilities.SplitString(s, ' ');
+                    ParametrizedPredicate p = (ParametrizedPredicate)Domain.Predicates.First(pp => pp.Name == pString[1]);
                     Dictionary<Parameter, Constant> dBindings = new Dictionary<Parameter, Constant>();
-                    int i = 1;
+                    int i = 2;
                     foreach (Parameter param in p.Parameters)
                     {
                         dBindings.Add(param, new Constant(param.Type, pString[i++]));
@@ -658,18 +658,21 @@ namespace CPORLib.Algorithms
                     pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
                 }
                 List<Predicate> predicates = new List<Predicate>();
-                foreach (Predicate p in Problem.Domain.Predicates)
+                int oneOfs = 0;
+                bool found = true;
+                while (found)
                 {
-                    predicates.Add(p.GetMOPredicate());
-                    predicates.Add(p.GetXorPredicate());
+                    foreach (Predicate p in Problem.Domain.Uncertainties)
+                    {
+                        Predicate mtRemove = new GroundedPredicate($"make-true_{oneOfs}");
+                        Predicate xorRemove = p.GetXorPredicate(oneOfs++);
+                    
+                        Problem.Domain.RemoveFakePredicate(mtRemove);
+                        pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(mtRemove);
+                        Problem.Domain.RemoveFakePredicate(xorRemove);
+                        found = pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(xorRemove);
+                    }
                 }
-                foreach (Predicate p in predicates)
-                {
-                    Problem.Domain.RemoveFakePredicate(p);
-                    pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(p);
-                }
-                Problem.Domain.RemoveFakePredicate(new GroundedPredicate("WIP"));
-                pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(new GroundedPredicate("WIP"));
             }
             return makeActions > 0;
         }
@@ -834,18 +837,13 @@ namespace CPORLib.Algorithms
             foreach (Predicate p in Problem.Domain.Uncertainties)
             {
                 Problem.Domain.RemoveFakePredicate(p.CreateVerifiedPredicate());
-                Problem.Domain.RemoveFakePredicate(p.GetMOPredicate());
-                Problem.Domain.RemoveFakePredicate(p.GetXorPredicate());
-
             }
-            Problem.Domain.RemoveFakePredicate(new GroundedPredicate("WIP"));
 
             List<PlanningAction> actionsToRemove = new List<PlanningAction>();
             foreach (PlanningAction pa in Problem.Domain.Actions)
             {
-                if (pa.Name.StartsWith("Make:") || pa.Name.StartsWith("wip"))
+                if (pa.Name.StartsWith("Make:"))
                     actionsToRemove.Add(pa);
-                //pa.Preconditions = ((CompoundFormula)pa.Preconditions).RemovePredicates(new HashSet<Predicate>(){ new GroundedPredicate("WIP").Negate() });
             }
             foreach (PlanningAction pa in actionsToRemove)
             {
