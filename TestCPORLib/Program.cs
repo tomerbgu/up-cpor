@@ -366,7 +366,7 @@ public class Program
             }
             if (args.Length > 3)
             {
-                double.TryParse(args[2], out Options.threshold);
+                double.TryParse(args[3], out Options.threshold);
             }
             bool op = Options.OverspecifiedPreconditions && Options.PredicateInaccuracy == PredicateInaccuracies.Neither;
             _ = RunTest(args[0], true, @"Tests/", op);
