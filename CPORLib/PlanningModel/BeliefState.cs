@@ -2015,21 +2015,7 @@ namespace CPORLib.PlanningModel
                             }
                         }
                     }
-                    if (a.Preconditions != null)
-                    {
-                        foreach (Predicate pEffect in a.Preconditions.GetAllPredicates())
-                        {
-                            if (p.Name == pEffect.Name)
-                            {
-                                Predicate verified = pEffect.CreateVerifiedPredicate();
-                                if (a.Effects == null)
-                                {
-                                    a.Effects = new CompoundFormula("and");
-                                }
-                                a.AddEffect(verified);
-                            }
-                        }
-                    }
+                    
                 }
             }
             if (addActions)
@@ -2044,9 +2030,12 @@ namespace CPORLib.PlanningModel
                 {
                     foreach (Predicate p in oneOfs[i].GetAllPredicates())
                     {
-                        Predicate xPred = p.GetXorPredicate(i);
-                        Observed.Add(xPred);
-                        Problem.Known.Add(xPred);
+                        if (Problem.Domain.Uncertainties.Contains(p))
+                        {
+                            Predicate xPred = p.GetXorPredicate(i);
+                            Observed.Add(xPred);
+                            Problem.Known.Add(xPred);
+                        }
                     }
                 }
 

@@ -939,6 +939,18 @@ namespace CPORLib.PlanningModel
                     PlanningAction aObserveTrue = a.NonConditionalObservationTranslation(dTags, m_lAlwaysKnown, true);
                     PlanningAction aObserveFalse = a.NonConditionalObservationTranslation(dTags, m_lAlwaysKnown, false);
 
+                    if (a.Preconditions != null)
+                    {
+                        foreach (Predicate pEffect in a.Preconditions.GetAllPredicates())
+                        {
+                            if (Uncertainties.Contains(pEffect))
+                            {
+                                Predicate verified = pEffect.CreateVerifiedPredicate();
+                                a.AddEffect(verified);
+                            }
+                        }
+                    }
+
                     foreach (Predicate p in a.Observe.GetAllPredicates()) {
                         Predicate pVer = p.CreateVerifiedPredicate();
                         if (Predicates.Contains(pVer))
@@ -977,7 +989,7 @@ namespace CPORLib.PlanningModel
                     xPreds.Add(xPred);
                     AddPredicate(xPred);
 
-                    Predicate undone = new GroundedPredicate($"make-true_{i}");
+                    Predicate undone = new GroundedPredicate($"make-true_{p.Name}_{i}");
                     AddPredicate(undone);
 
                     a = new ParametrizedAction($"Make:_{i}_ " + p.Name);
