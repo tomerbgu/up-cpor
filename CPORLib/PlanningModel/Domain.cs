@@ -963,11 +963,15 @@ namespace CPORLib.PlanningModel
                     lActions.Add(aObserveFalse);
                 }
 
-                else
+                else// if (!a.Name.StartsWith("Make:"))
                 {
                     PlanningAction aKnowledge = a.AddTaggedConditions(dTags, m_lAlwaysKnown);
                     lActions.Add(aKnowledge);
                 }
+                //else
+                //{
+                //    lActions.Add(a);
+                //}
             }
             return lActions;
         }
@@ -983,47 +987,49 @@ namespace CPORLib.PlanningModel
                 CompoundFormula andEffect;
                 ParametrizedPredicate pp2;
                 List<Predicate> xPreds = new List<Predicate>();
-                for (int i = 0; i < allOneOfs.Count; i++)
+                if (TranslateXor)
                 {
-                    Predicate xPred = p.GetXorPredicate(i);
-                    xPreds.Add(xPred);
-                    AddPredicate(xPred);
-
-                    Predicate undone = new GroundedPredicate($"make-true_{p.Name}_{i}");
-                    AddPredicate(undone);
-
-                    a = new ParametrizedAction($"Make:_{i}_ " + p.Name);
-                    if (p is ParametrizedPredicate)
+                    for (int i = 0; i < allOneOfs.Count; i++)
                     {
-                        ParametrizedPredicate pp = (ParametrizedPredicate)p;
-                        foreach (Parameter par in pp.Parameters)
+                        Predicate xPred = p.GetXorPredicate(i);
+                        xPreds.Add(xPred);
+                        AddPredicate(xPred);
+
+                        Predicate undone = new GroundedPredicate($"make-true_{p.Name}_{i}");
+                        AddPredicate(undone);
+
+                        a = new ParametrizedAction($"Make:_{i}_ " + p.Name);
+                        if (p is ParametrizedPredicate)
                         {
-                            a.AddParameter(par);
+                            ParametrizedPredicate pp = (ParametrizedPredicate)p;
+                            foreach (Parameter par in pp.Parameters)
+                            {
+                                a.AddParameter(par);
+                            }
                         }
+                        else
+                            throw new Exception();
+
+                        verified = p.CreateVerifiedPredicate();
+                        a.AddPrecondition(verified.Negate());
+                        a.AddPrecondition(p.Negate());
+                        a.AddPrecondition(undone.Negate());
+                        a.AddPrecondition(xPred);
+
+                        andEffect = new CompoundFormula("and");
+                        pp2 = new ParametrizedPredicate(p.Name);
+                        foreach (Parameter par in a.Parameters)
+                        {
+                            pp2.AddParameter(par);
+                        }
+
+                        andEffect.AddOperand(pp2);
+                        andEffect.AddOperand(undone);
+                        a.Effects = andEffect;
+
+                        lActions.Add(a);
                     }
-                    else
-                        throw new Exception();
-
-                    verified = p.CreateVerifiedPredicate();
-                    a.AddPrecondition(verified.Negate());
-                    a.AddPrecondition(p.Negate());
-                    a.AddPrecondition(undone.Negate());
-                    a.AddPrecondition(xPred);
-
-                    andEffect = new CompoundFormula("and");
-                    pp2 = new ParametrizedPredicate(p.Name);
-                    foreach (Parameter par in a.Parameters)
-                    {
-                        pp2.AddParameter(par);
-                    }
-
-                    andEffect.AddOperand(pp2);
-                    andEffect.AddOperand(undone);
-                    a.Effects = andEffect;
-
-                    lActions.Add(a);
                 }
-
                 a = new ParametrizedAction($"Make: " + p.Name);
                 if (p is ParametrizedPredicate)
                 {
@@ -1039,8 +1045,10 @@ namespace CPORLib.PlanningModel
                 verified = p.CreateVerifiedPredicate();
                 a.AddPrecondition(verified.Negate());
                 a.AddPrecondition(p.Negate());
-                foreach (Predicate xPredicate in xPreds)
-                    a.AddPrecondition(xPredicate.Negate());
+
+                if (TranslateXor)
+                    foreach (Predicate xPredicate in xPreds)
+                            a.AddPrecondition(xPredicate.Negate());
 
                 andEffect = new CompoundFormula("and");
                 pp2 = new ParametrizedPredicate(p.Name);
@@ -3962,7 +3970,7 @@ namespace CPORLib.PlanningModel
         {
             //if we are in ALL case, don not necessarily add a precondition clause
             if (Options.PredicateInaccuracy==PredicateInaccuracies.Both)
-                if (RandomGenerator.NextDouble() < Options.precondThreshold)
+                if (RandomGenerator.NextDouble() > Options.precondThreshold)
                     return new List<Predicate>();
 
 
@@ -4450,36 +4458,21 @@ namespace CPORLib.PlanningModel
             if (!Options.UseCosts || forStatsOnly)
             {
                 relaxedActions = GetActionsWOPrecondition();
-                //todo will this fix maketrue
-                bool modifyProblemBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.Lazy && Options.PredicateInaccuracy==PredicateInaccuracies.Both;
-                //GenericArraySet<Predicate> origObserved = new GenericArraySet<Predicate>();
-                //BeliefState original = pss.m_bsInitialBelief.Clone();
-                //Problem oProb = pss.Problem;
-                //pss.Problem = new Problem(pss.Problem);
-                //foreach (Predicate pred in pss.Observed)
-                //{
-                //    origObserved.Add(pred.Clone());
-                //}
+
+                bool modifyProblemBeforeStateSelection = LazyStrategies.Contains(InaccuracyHandlingStrategy) && Options.PredicateInaccuracy==PredicateInaccuracies.Both;
                 List<Predicate> unVerified = new List<Predicate>();
                 if (modifyProblemBeforeStateSelection)
                 {
                     unVerified = pss.RemoveUnverifiedNegativeFacts();
-                    //    pss.m_bsInitialBelief.ModifyProblemBeforeStateSelection(pss);
-                    //    pss.m_lObserved = new GenericArraySet<Predicate>(pss.m_bsInitialBelief.Observed);
                 }
                 List<PlanningAction> res =  GroundAllRelaxedActions(pss, relaxedActions, true);
-                //not sure if i have to replace them bc it is the expanded state anyways
+
                 if (modifyProblemBeforeStateSelection)
                 {
                     foreach (Predicate p in unVerified)
                     {
-                        
                         pss.AddObserved(p);
                     }
-                    //    //i want to change back bc i'm assuming that even though there was a false negative most info is correct
-                    //    pss.Problem = oProb;
-                    //    pss.m_bsInitialBelief.m_lHiddenFormulas = original.Hidden;
-                    //    pss.m_lObserved = origObserved;
                 }
                 return res;
             }

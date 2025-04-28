@@ -18,9 +18,9 @@ namespace CPORLib.FFCS
 
         public static int MAX_CONSTANTS = 20000;
         public static int MAX_PREDICATES = 3200;
-        public static int MAX_TYPES = 50;
+        public static int MAX_TYPES = 100;
         public static int MAX_ARITY = 10;
-        public static int MAX_VARS = 15;
+        public static int MAX_VARS = 30;
 
 
         public static int MAX_TYPE = 20000;

@@ -502,12 +502,14 @@ namespace CPORLib.Algorithms
                         Console.WriteLine(e.Message);
                     }
                     deadend = true;
-                    if (!Options.OverspecifiedPreconditions && (Options.PredicateInaccuracy == Options.PredicateInaccuracies.FalsePositive || Options.PredicateInaccuracy == Options.PredicateInaccuracies.Neither))
+                    //todo tomer
+                    if (!OverspecifiedPreconditions
+                        && (PredicateInaccuracy == PredicateInaccuracies.FalsePositive || PredicateInaccuracy == PredicateInaccuracies.Neither || InaccuracyHandlingStrategy==InaccuracyHandlingStrategies.BLOptimistic))
                     {
+                        Console.WriteLine("trying to switch selected state");
                         TryNewStateSelection(out lPlan, pssCurrent, bPreconditionFailure);
                         deadend = false;
                     }
-                    
                 }
                 if (deadend)
                 {
@@ -515,53 +517,37 @@ namespace CPORLib.Algorithms
                     Domain dTaggedDE = null;
                     Problem pTaggedDE = null;
 
-                    //first try and see if there is a way to do it without modifying actions
-                    //try
-                    //{
-                        
-
                     //only preconditions
                     if (Options.OverspecifiedPreconditions && Options.PredicateInaccuracy == PredicateInaccuracies.Neither)
                         SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
-
                     //only state inaccuracies
-                    else if (!Options.OverspecifiedPreconditions &&
-                                (Options.PredicateInaccuracy == PredicateInaccuracies.FalseNegative || Options.PredicateInaccuracy == PredicateInaccuracies.Both))
+                    else if (!OverspecifiedPreconditions
+                                && (PredicateInaccuracy == PredicateInaccuracies.FalseNegative || PredicateInaccuracy == PredicateInaccuracies.Both))
                         SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
-
                     //both
                     else
                     {
                         if (Options.SolveBothSequentially)
                         {
                             //first OP
-                            SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                            //SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
 
                             //first FN
-                            //SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                            if (InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.LazyOptimistic)
+                                SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
+                            else
+                                SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
                         }
-
-
-
                         else
                             SolveBoth(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
                     }
-                        
-                    //}
-                    //catch (Exception ex) when (ex is OverspecifiedPreconditionException || ex is DeadendException)
-                    //{
-                    //    if (Options.OverspecifiedPreconditions)
-                    //        SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
-                    //}
                 }
                 if (lPlan == null)
                 {
                     Debug.WriteLine("Classical planner failed");
                     return null;
                 }
-
             }
-
             return lPlan;
         }
 
@@ -598,6 +584,10 @@ namespace CPORLib.Algorithms
 
         private bool SolveByChangingFalseNegatives(out List<string> lPlan, PartiallySpecifiedState pssCurrent, Domain dTaggedDE, Problem pTaggedDE, string modifiedAction = "")
         {
+
+            if (!(LazyStrategies.Contains(InaccuracyHandlingStrategy) || InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.MakeTrue))
+                throw new DeadendException($"Deadend while in {InaccuracyHandlingStrategy} strategy");
+
             resetModifiedPredicates(pssCurrent, modifiedAction);
             pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out int ctags, out dTaggedDE, out pTaggedDE, true, null);
 
@@ -606,7 +596,6 @@ namespace CPORLib.Algorithms
             try
             {
                 lPlan = RunPlanner(dTaggedDE, pTaggedDE, -1);
-
                 var filtered = lPlan.Where(s => s.StartsWith("Make:"));
                 foreach (var s in filtered)
                 {
@@ -647,7 +636,24 @@ namespace CPORLib.Algorithms
             {
                 if (makeActions > 0)
                 {
-                    pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out ctags, out Domain dTaggedModified, out Problem pTaggedModified, false, lPlan);
+                    List<CompoundFormula> oldHidden = null;
+                    if (!TranslateXor)
+                    {
+                        oldHidden = new List<CompoundFormula>(pssCurrent.m_bsInitialBelief.Hidden);
+                        for (int i = 0; i < pssCurrent.m_bsInitialBelief.Hidden.Count; i++)
+                        {
+                            if (pssCurrent.m_bsInitialBelief.Hidden[i]!=null && pssCurrent.m_bsInitialBelief.Hidden[i].IsSimpleOneOf())
+                                pssCurrent.m_bsInitialBelief.Hidden[i] = null;
+                        }
+                    }
+                    pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out ctags, out Domain dTaggedModified, out Problem pTaggedModified, false, lPlan, false);
+                    if (!TranslateXor)
+                    {
+                        for (int i = 0; i < pssCurrent.m_bsInitialBelief.Hidden.Count; i++)
+                        {
+                            pssCurrent.m_bsInitialBelief.Hidden[i] = oldHidden[i];
+                        }
+                    }
                     ExecutionData.ReplanningIncludeModCount++;
                     lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
                 }
@@ -673,6 +679,12 @@ namespace CPORLib.Algorithms
                         found = pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(xorRemove);
                     }
                 }
+            }
+            if (InaccuracyHandlingStrategy != InaccuracyHandlingStrategies.BLOptimistic) {
+                InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.BLOptimistic;
+                pssCurrent.m_bsInitialBelief.ModifyProblemBeforeStateSelection(null);
+                PartiallySpecifiedState pss = pssCurrent.m_bsInitialBelief.GetPartiallySpecifiedState();
+                pssCurrent.m_lObserved = pss.Observed;
             }
             return makeActions > 0;
         }
@@ -807,7 +819,7 @@ namespace CPORLib.Algorithms
                     try
                     {
                         //if removing a precond didnt work try seeing if it is affected by FN
-                        if (Options.PredicateInaccuracy==PredicateInaccuracies.Both && Options.SolveBothSequentially)
+                        if (Options.PredicateInaccuracy==PredicateInaccuracies.Both && SolveBothSequentially && InaccuracyHandlingStrategy != InaccuracyHandlingStrategies.BLOptimistic)
                             SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
                         //if (lPlan==null || lPlan.Count == 0)
                     }

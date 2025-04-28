@@ -1841,12 +1841,12 @@ namespace CPORLib.PlanningModel
                     origObserved.Add(pred.Clone());
                 }
 
-                modifyDomainBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.MakeTrue && !modifyGoal;
+                modifyDomainBeforeStateSelection = InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.MakeTrue && !modifyGoal;
                 if (modifyDomainBeforeStateSelection)
                 {
                     lFakeActions = ModifyDomainBeforeStateSelection(true);
                 }
-                modifyProblemBeforeStateSelection = Options.InaccuracyHandlingStrategy == Options.InaccuracyHandlingStrategies.Lazy;
+                modifyProblemBeforeStateSelection = LazyStrategies.Contains(InaccuracyHandlingStrategy);
                 
                 if (modifyProblemBeforeStateSelection)
                 {
@@ -1867,8 +1867,6 @@ namespace CPORLib.PlanningModel
                 foreach (string newGoal in oldPlan.Where(s => s.StartsWith("Make:")))
                 {
                     string[] a = Utilities.SplitString(newGoal, ' ');
-                    //string pred = string.Join(" ", a.Skip(1));
-                    //String[] vars = a.Skip(1);
                     ParametrizedPredicate pp = (ParametrizedPredicate)Problem.Domain.Predicates.FirstOrDefault(obj => obj.Name == a[1]).Clone();
                     GroundedPredicate newGrounded = new GroundedPredicate(pp.Name);
                     int i = 1;
@@ -1883,6 +1881,7 @@ namespace CPORLib.PlanningModel
                     addNeededTag(newGrounded);
                 }
                 ModifyProblemBeforeStateSelection(pssCurrent, makeTruePredicates);
+                //Problem.Goal = modifiedGoal;
             }
             cTags = 0;
             //bool change = true;// todo why was this !falseNegatives;
@@ -1891,10 +1890,19 @@ namespace CPORLib.PlanningModel
                 List<ISet<Predicate>> lChosen = ChooseStateSet();
                 ChosenStates = lChosen;
             }
-            else
+            else if (!modifyGoal)
             {
                 ChosenStates.Reverse();
             }
+            if (modifyGoal)
+                foreach(Predicate p in m_lNeededTag)
+                {
+                    ChosenStates[0].Remove(p.Negate());
+                    ChosenStates[0].Remove(p);
+                    ChosenStates[0].Add(p);
+
+                }
+            
 
             dTagged = null;
             pTagged = null;
@@ -1942,7 +1950,26 @@ namespace CPORLib.PlanningModel
             }
             if (modifyGoal)
             {
+                foreach (Predicate p in m_lNeededTag)
+                {
+                    Predicate kp = p.Clone();
+                    kp.Name = $"K{kp.Name}";
+                    pTagged.Known.Remove(kp);
+
+                    Predicate kpn = p.Clone();
+                    kpn.Name = $"KN{kpn.Name}";
+                    pTagged.Known.Remove(kpn);
+
+                    //Predicate kgiven = p.GenerateKnowGiven("tag0");
+                    //List<Predicate> toRemove = pTagged.Known.Where(pk => pk.ToString().Equals(kgiven.ToString())).ToList();
+                    //if (toRemove.Count > 0)
+                    //    pTagged.Known.Remove(toRemove[0]);
+
+                    if (!pTagged.Known.Contains(p))
+                        pTagged.AddKnown(p);
+                }
                 m_lNeededTag.Clear();
+
                 pTagged.Goal = modifiedGoal;
                 Problem = oProb;
                 m_lHiddenFormulas = original.m_lHiddenFormulas;
@@ -2026,15 +2053,18 @@ namespace CPORLib.PlanningModel
                 foreach (PlanningAction a in lFakeActions)
                     Problem.Domain.AddAction(a);
 
-                for (int i = 0; i < oneOfs.Count; i++)
+                if (TranslateXor)
                 {
-                    foreach (Predicate p in oneOfs[i].GetAllPredicates())
+                    for (int i = 0; i < oneOfs.Count; i++)
                     {
-                        if (Problem.Domain.Uncertainties.Contains(p))
+                        foreach (Predicate p in oneOfs[i].GetAllPredicates())
                         {
-                            Predicate xPred = p.GetXorPredicate(i);
-                            Observed.Add(xPred);
-                            Problem.Known.Add(xPred);
+                            if (Problem.Domain.Uncertainties.Select(u => u.Name).Contains(p.Name))
+                            {
+                                Predicate xPred = p.GetXorPredicate(i);
+                                Observed.Add(xPred);
+                                Problem.Known.Add(xPred);
+                            }
                         }
                     }
                 }
@@ -2057,7 +2087,7 @@ namespace CPORLib.PlanningModel
         {
             foreach (Predicate s in Problem.Domain.Uncertainties)
             {
-                var uncertainObserved = Observed.Where(p => p.Name == s.Name);
+                var uncertainObserved = new List<Predicate>(Observed.Where(p => p.Name == s.Name));
                 IEnumerable<Predicate> uncertainVerified = new HashSet<Predicate>();
                 List<Predicate> addToObserved = new List<Predicate>();
                 if (pssCurrent != null)
@@ -2086,6 +2116,7 @@ namespace CPORLib.PlanningModel
                         }
                     }
                 }
+
                 foreach (Predicate p in uncertainObserved)
                 {
                     if (p.Negation && pssCurrent == null && InaccuracyHandlingStrategy==InaccuracyHandlingStrategies.BLOptimistic)
@@ -2099,24 +2130,34 @@ namespace CPORLib.PlanningModel
                             Problem.AddKnown(p.Canonical());
                         }
                     }
-                    else if ((pssCurrent==null && InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BLPessimistic) || (p.Negation && !uncertainVerified.Contains(p) && InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.Lazy)) //pssCurrent is null only if we are at start
+                    else if ((pssCurrent==null && InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BLPessimistic) ||
+                             (p.Negation && !uncertainVerified.Contains(p) && LazyStrategies.Contains(InaccuracyHandlingStrategy))) //pssCurrent is null only if we are at start
                     {
                         bool neg1 = Observed.Remove(p);
                         bool neg2 = Problem.Known.Remove(p);
                         //bool neg3 = pssCurrent.Observed.Remove(p);
                         if (neg1 || neg2)
                         {
-                            Unknown.Add(p.Canonical());
-                            Problem.Unknown.Add(p.Canonical());
-                            if (pssCurrent!=null)
-                                pssCurrent.m_bsInitialBelief.Unknown.Add(p.Canonical());
-                            //pssCurrent.Hidden.Add(p.Canonical());
-                            
-                            CompoundFormula orHidden = new CompoundFormula("or");
-                            orHidden.AddOperand(p);
-                            orHidden.SimpleAddOperand(p.Negate());
-                            m_lHiddenFormulas.Add(orHidden);
-                            //pssCurrent.m_bsInitialBelief.Hidden.Add(orHidden);
+                            if (InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.LazyPessimistic || InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.BLPessimistic)
+                            {
+                                Unknown.Add(p.Canonical());
+                                Problem.Unknown.Add(p.Canonical());
+                                if (pssCurrent != null)
+                                    pssCurrent.m_bsInitialBelief.Unknown.Add(p.Canonical());
+                                //pssCurrent.Hidden.Add(p.Canonical());
+
+                                CompoundFormula orHidden = new CompoundFormula("or");
+                                orHidden.AddOperand(p);
+                                orHidden.SimpleAddOperand(p.Negate());
+                                m_lHiddenFormulas.Add(orHidden);
+                            }
+                            else if (InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.LazyOptimistic)
+                            {
+                                AddObserved(p.Canonical());
+                                Problem.AddKnown(p.Canonical());
+                                if (pssCurrent != null)
+                                    pssCurrent.m_bsInitialBelief.AddObserved(p.Canonical());
+                            }
                         }
                     }
                 }

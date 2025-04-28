@@ -883,7 +883,7 @@ namespace CPORLib.PlanningModel
             SplitEffects(lConditions, lObligatory);
             CompoundFormula cfPreconditions = new CompoundFormula("and");
             HashSet<Predicate> lKnowPreconditions = new HashSet<Predicate>();
-            if (Preconditions != null)
+            if (Preconditions != null) // && !Name.StartsWith("Make:") todo tomer
             {
                 bool flag = true;
                 if (true)

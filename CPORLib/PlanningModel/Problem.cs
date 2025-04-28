@@ -999,9 +999,8 @@ namespace CPORLib.PlanningModel
                 {
                     gpK.AddConstant(c);
                 }
-                
 
-                if (!Domain.AlwaysKnown(gp))
+                if (!Domain.AlwaysKnown(gp)) //!Goal.GetAllPredicates().Contains(gpK) && 
                     problem.AddKnown(gpK);
                 if (!gp.Negation)
                     problem.AddKnown(gp);
@@ -1020,6 +1019,9 @@ namespace CPORLib.PlanningModel
                     if (gp.Name == "Choice" || gp.Name.ToLower().Contains("_" + Utilities.OPTION_PREDICATE))// || Domain.AlwaysKnown(gp))
                         continue;
                     GroundedPredicate gpK = GenerateKnowGiven(gp, p.Key, false);
+                    Predicate gpKnown = gp.Canonical().Clone();
+                    gpKnown.Name = $"K{gpKnown.Name}";
+                    //if (!Goal.GetAllPredicates().Contains(gpKnown))
                     problem.AddKnown(gpK);
                 }
 
@@ -1589,5 +1591,10 @@ namespace CPORLib.PlanningModel
                 Ready = true;
             }
         }
+
+        //internal void ClearHidden()
+        //{
+        //    m_lHidden.Clear();
+        //}
     }
 }

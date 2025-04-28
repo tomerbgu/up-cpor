@@ -40,14 +40,9 @@ namespace CPORLib.Algorithms
             {
                 OverSpecifyPreconds();
             }
-            //else
-            //{
             Domain.resetPreconditions();
-            //}
             //end part
 
-            //Problem = new Problem(problem);
-            //Domain = Problem.Domain;
 
             //this is part of our experiment setup for negating initial literals
             NegatePredicatesForSimulations(Problem, domain);

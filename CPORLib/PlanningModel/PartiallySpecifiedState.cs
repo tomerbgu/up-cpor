@@ -293,8 +293,6 @@ namespace CPORLib.PlanningModel
             countOfActionFromRoot = 0;
             ID = STATE_COUNT++;
 
-
-
             Problem = bs.Problem;
             m_sPredecessor = null;
             m_lObserved = new GenericArraySet<Predicate>(bs.Observed);
@@ -304,7 +302,7 @@ namespace CPORLib.PlanningModel
             ChildCount = 0;
 
             m_lHidden = new GenericArraySet<Predicate>();
-            foreach (CompoundFormula cf in bs.Hidden)
+            foreach (CompoundFormula cf in bs.Hidden.Where(c => c != null))
             {
                 HashSet<Predicate> lCurrent = new HashSet<Predicate>();
                 cf.GetAllPredicates(lCurrent);
@@ -2481,7 +2479,7 @@ namespace CPORLib.PlanningModel
         }
 
         public void GetTaggedDomainAndProblem(Options.DeadendStrategies dsStrategy, bool bPreconditionFailure, out int cTags,
-            out Domain dTagged, out Problem pTagged, bool falseNegatives, List<string> newGoal, bool changeState = true)
+            out Domain dTagged, out Problem pTagged, bool falseNegatives, List<string> oldPlan, bool changeState = true)
         {
             List<Action> lActions = new List<PlanningAction>();
             PartiallySpecifiedState pssCurrent = this;
@@ -2491,7 +2489,7 @@ namespace CPORLib.PlanningModel
                     lActions.Insert(0, pssCurrent.GeneratingAction);
                 pssCurrent = pssCurrent.m_sPredecessor;
             }
-            m_bsInitialBelief.GetTaggedDomainAndProblem(this, lActions, dsStrategy, bPreconditionFailure, out cTags, out dTagged, out pTagged, falseNegatives, newGoal, changeState);
+            m_bsInitialBelief.GetTaggedDomainAndProblem(this, lActions, dsStrategy, bPreconditionFailure, out cTags, out dTagged, out pTagged, falseNegatives, oldPlan, changeState);
         }
 
         private State WriteTaggedDomainAndProblemDeadEnd(List<Action> lActions, List<Formula> lMaybeDeadends, DeadendStrategies dsStrategy, bool bPreconditionFailure, out int cTags, out MemoryStream msModels)

@@ -606,13 +606,13 @@ namespace CPORLib.FFCS
             if (FF.DP.ggoal.connective == TRU)
             {
                 FFUtilities.Write("\nff: final: Main.DP.ggoal can be simplified to true. The empty plan solves it\n\n");
-                throw new DeadendException("Deadend");
+                throw new DeadendException("Deadend - already at goal");
                 //Exit(1);
             }
             if (FF.DP.ggoal.connective == FAL)
             {
                 FFUtilities.Write("\nff: goal can be simplified to false. No plan will solve it\n\n");
-                throw new DeadendException("Deadend"); 
+                throw new DeadendException("Deadend - unreachable goal"); 
                 Exit(1);
             }
 
