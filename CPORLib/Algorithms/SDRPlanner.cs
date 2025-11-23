@@ -19,6 +19,8 @@ namespace CPORLib.Algorithms
     public class SDRPlanner : PlannerBase
     {
         private PartiallySpecifiedState CurrentState;
+        PartiallySpecifiedState LazyState;
+
         private List<string> FutureActions;
         private int NextActionIndex;
         private bool ExpectingObservation;
@@ -54,6 +56,16 @@ namespace CPORLib.Algorithms
             if (Options.PredicateInaccuracy != Options.PredicateInaccuracies.Neither && removeInaccuracies)
                 bsInitial.ModifyProblemBeforeStateSelection(CurrentState);
             CurrentState = bsInitial.GetPartiallySpecifiedState();
+
+            //init lazy state
+            if (LazyStrategies.Contains(InaccuracyHandlingStrategy))
+            {
+                BeliefState bs= Problem.GetInitialBelief();
+                if (Options.PredicateInaccuracy != Options.PredicateInaccuracies.Neither)
+                    bs.ModifyProblemBeforeStateSelection(LazyState);
+                LazyState = bs.GetPartiallySpecifiedState();
+            }
+
             FutureActions = null;
             NextActionIndex= 0;
             ExpectingObservation = false;
@@ -130,11 +142,10 @@ namespace CPORLib.Algorithms
             }
             foreach (Predicate p in lGrounded)
             {
-                if (RandomGenerator.NextDouble() < Options.fakePredicateThreshold)
+                if (RandomGenerator.NextDouble() < Options.fakeThreshold)
                     Problem.AddKnown(p); //adding that sometimes the predicate is true
             }
         }
-
         public string GetAction()
         {
             Error = "";
@@ -154,48 +165,44 @@ namespace CPORLib.Algorithms
             if (FutureActions != null && NextActionIndex < FutureActions.Count)
             {
                 if (SDR_OBS)
-                {
-                    List<Action> lObservationActions = Domain.GroundAllObservationActions(CurrentState.Observed, true);
-                    int counter = 0;
-                    foreach (Action a in lObservationActions)
-                    {
-                        Predicate pObserve = ((PredicateFormula)a.Observe).Predicate;
-                        if (!CurrentState.Observed.Contains(pObserve) && !CurrentState.Observed.Contains(pObserve.Negate()) && !FutureActions.Contains(a.Name))
-                        {
-                            FutureActions.Insert(NextActionIndex, a.Name);
-                            if (Options.Verbose)
-                                Console.WriteLine("Inserted " + a.Name + " to plan");
-                            counter++;
-                        }
-                    }
-                    //clear the rest of the future actions to force replan after observations
-                    while (NextActionIndex + counter < FutureActions.Count)
-                    {
-                        string s = FutureActions[NextActionIndex + counter];
-                        if (Domain.GetActionByName(s).Observe == null)
-                            break;
-                        counter++;
-                    }
-                    if (counter > 0)
-                    {
-                        int i = NextActionIndex + counter;
-                        FutureActions.RemoveRange(i, FutureActions.Count - i);
-                    }
-                }
+                    AddObservationActions();
+                
                 string sAction = FutureActions[NextActionIndex];
-                bool bPreconditionsHold = CurrentState.IsApplicable(sAction);
-                //Console.WriteLine("SDR: Checking applicability of action " + sAction +" : " + bPreconditionsHold);
+                bool bPreconditionsHold = LazyActivated ? LazyState.IsApplicable(sAction) : CurrentState.IsApplicable(sAction);
+                LazyActivated = false;
                 if (bPreconditionsHold)
                     return sAction;
                 else
                     bPreconditionFailure = true;
             }
 
-            List<string> lPlan = Plan(CurrentState, bPreconditionFailure, out bool bDeadEndReached, out State sChosen);
+            List<string> lPlan;
+            if (LazyActivated)
+            {
+                InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.BLOptimistic;
+                //BeliefState bs = CurrentState.m_bsInitialBelief.Clone();
+                //bs.ModifyProblemBeforeStateSelection(null);
+                //LazyState = bs.GetPartiallySpecifiedState();
+                //CurrentState.m_lObserved = pss.Observed;
+                lPlan = Plan(LazyState, bPreconditionFailure, out bool bDeadEndReached, out State sChosen);
+                InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.LazyOptimistic;
+
+            }
+            else
+                lPlan = Plan(CurrentState, bPreconditionFailure, out bool bDeadEndReached, out State sChosen);
             
             if (lPlan == null || lPlan.Count ==0)
             {
                 Error = "Could not plan for the current state";
+                //this needs to be here in order to allow the action to occur later
+                if (InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.LazyOptimistic)
+                {
+                    LazyActivated = true;
+                    //InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.BLOptimistic;
+                    //CurrentState.m_bsInitialBelief.ModifyProblemBeforeStateSelection(null);
+                    //PartiallySpecifiedState pss = CurrentState.m_bsInitialBelief.GetPartiallySpecifiedState();
+                    //CurrentState.m_lObserved = pss.Observed;
+                }
                 return GetAction();
                 //return null;
             }
@@ -204,6 +211,36 @@ namespace CPORLib.Algorithms
             FutureActions = lPlan;
             NextActionIndex = 0;
             return GetAction();
+        }
+
+        private void AddObservationActions()
+        {
+            List<Action> lObservationActions = Domain.GroundAllObservationActions(CurrentState.Observed, true);
+            int counter = 0;
+            foreach (Action a in lObservationActions)
+            {
+                Predicate pObserve = ((PredicateFormula)a.Observe).Predicate;
+                if (!CurrentState.Observed.Contains(pObserve) && !CurrentState.Observed.Contains(pObserve.Negate()) && !FutureActions.Contains(a.Name))
+                {
+                    FutureActions.Insert(NextActionIndex, a.Name);
+                    if (Options.Verbose)
+                        Console.WriteLine("Inserted " + a.Name + " to plan");
+                    counter++;
+                }
+            }
+            //clear the rest of the future actions to force replan after observations
+            while (NextActionIndex + counter < FutureActions.Count)
+            {
+                string s = FutureActions[NextActionIndex + counter];
+                if (Domain.GetActionByName(s).Observe == null)
+                    break;
+                counter++;
+            }
+            if (counter > 0)
+            {
+                int i = NextActionIndex + counter;
+                FutureActions.RemoveRange(i, FutureActions.Count - i);
+            }
         }
 
         public bool SetObservation(string sObservation)
@@ -236,6 +273,8 @@ namespace CPORLib.Algorithms
                 Error = "Sensing action executed, expecting an observation.";
                 return false;
             }
+
+            //advance current state
             PartiallySpecifiedState psNext = CurrentState.Apply(a, sObservation);
             if (psNext == null)
             {
@@ -243,6 +282,19 @@ namespace CPORLib.Algorithms
                 return false;
             }
             CurrentState = psNext;
+
+            //advance lazystate
+            if (LazyStrategies.Contains(InaccuracyHandlingStrategy))
+            {
+                PartiallySpecifiedState lazyNext = LazyState.Apply(a, sObservation);
+                if (psNext == null)
+                {
+                    Error = "Failed to apply the action at the current state.";
+                    return false;
+                }
+                LazyState = lazyNext;
+            }
+
             NextActionIndex++;
             if (NextActionIndex == FutureActions.Count || sObservation != null)//(sObservation != null && sObservation != "Fail")) TODO
             {

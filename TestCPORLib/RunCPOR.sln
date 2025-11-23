@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.7.34031.279
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RunCPOR", "RunCPOR.csproj", "{7613AC3D-1444-4DA4-8562-F01BAFB2D437}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CPORLib", "..\CPORLib\CPORLib.csproj", "{7CB7E763-4B82-4E71-B476-19477FFE2D19}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7613AC3D-1444-4DA4-8562-F01BAFB2D437}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7613AC3D-1444-4DA4-8562-F01BAFB2D437}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7613AC3D-1444-4DA4-8562-F01BAFB2D437}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7613AC3D-1444-4DA4-8562-F01BAFB2D437}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7CB7E763-4B82-4E71-B476-19477FFE2D19}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7CB7E763-4B82-4E71-B476-19477FFE2D19}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7CB7E763-4B82-4E71-B476-19477FFE2D19}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7CB7E763-4B82-4E71-B476-19477FFE2D19}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E0F8B6F1-C11B-43C7-B6FD-FC1C68F5C250}
+	EndGlobalSection
+EndGlobal

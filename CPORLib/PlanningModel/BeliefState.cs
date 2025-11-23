@@ -1926,6 +1926,10 @@ namespace CPORLib.PlanningModel
                     {
                         Problem.Domain.Actions.Remove(fa);
                     }
+                    
+                    Predicate makePredicate = new GroundedPredicate("make");
+                    Problem.Domain.RemoveFakePredicate(makePredicate);
+                    
                     foreach (PlanningAction a in Problem.Domain.Actions)
                     {
                         foreach (Predicate p in Problem.Domain.Uncertainties)
@@ -1955,15 +1959,32 @@ namespace CPORLib.PlanningModel
                     Predicate kp = p.Clone();
                     kp.Name = $"K{kp.Name}";
                     pTagged.Known.Remove(kp);
+                    pTagged.Known.Add(kp.Negate());
 
                     Predicate kpn = p.Clone();
                     kpn.Name = $"KN{kpn.Name}";
                     pTagged.Known.Remove(kpn);
+                    pTagged.Known.Add(kpn.Negate());
 
-                    //Predicate kgiven = p.GenerateKnowGiven("tag0");
-                    //List<Predicate> toRemove = pTagged.Known.Where(pk => pk.ToString().Equals(kgiven.ToString())).ToList();
-                    //if (toRemove.Count > 0)
-                    //    pTagged.Known.Remove(toRemove[0]);
+                    Predicate kgiven = p.GenerateKnowGiven("tag0");
+                    List<Predicate> toRemove = pTagged.Known.Where(pk => pk.ToString().Equals(kgiven.ToString())).ToList();
+                    if (toRemove.Count > 0)
+                        pTagged.Known.Remove(toRemove[0]);
+
+                    kgiven = p.GenerateKnowGiven("tag1");
+                    toRemove = pTagged.Known.Where(pk => pk.ToString().Equals(kgiven.ToString())).ToList();
+                    if (toRemove.Count > 0)
+                        pTagged.Known.Remove(toRemove[0]);
+
+                    kgiven = p.Negate().GenerateKnowGiven("tag");
+                    toRemove = pTagged.Known.Where(pk => pk.ToString().Equals(kgiven.ToString())).ToList();
+                    if (toRemove.Count > 0)
+                        pTagged.Known.Remove(toRemove[0]);
+
+                    kgiven = p.Negate().GenerateKnowGiven("tag1");
+                    toRemove = pTagged.Known.Where(pk => pk.ToString().Equals(kgiven.ToString())).ToList();
+                    if (toRemove.Count > 0)
+                        pTagged.Known.Remove(toRemove[0]);
 
                     if (!pTagged.Known.Contains(p))
                         pTagged.AddKnown(p);

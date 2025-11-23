@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CPORLib")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+add36ef0e8cd284b76e480ec858d8d356c521f9e")]
 [assembly: System.Reflection.AssemblyProductAttribute("CPORLib")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CPORLib")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

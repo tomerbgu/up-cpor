@@ -465,6 +465,7 @@ namespace CPORLib.Algorithms
             return currentState;
         }
 
+        protected bool LazyActivated = false;
         protected List<string> Plan(PartiallySpecifiedState pssCurrent, bool bPreconditionFailure)
         {
             Debug.WriteLine("Started classical planning");
@@ -529,11 +530,15 @@ namespace CPORLib.Algorithms
                     {
                         if (Options.SolveBothSequentially)
                         {
+                            if (LazyStrategies.Contains(InaccuracyHandlingStrategy) && !LazyActivated)
+                            {
+                                return new List<String>();// LazyActivated = true;
+                            }
                             //first OP
                             //SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
 
                             //first FN
-                            if (InaccuracyHandlingStrategy == InaccuracyHandlingStrategies.LazyOptimistic)
+                            if (LazyStrategies.Contains(InaccuracyHandlingStrategy))
                                 SolveByChangingFalseNegatives(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
                             else
                                 SolveByRemovingPrecondition(out lPlan, pssCurrent, dTaggedDE, pTaggedDE);
@@ -577,7 +582,10 @@ namespace CPORLib.Algorithms
             foreach (Predicate p in modifiedPredicates)
             {
                 if (!pss.Verified.Contains(p) && !pss.Verified.Contains(p.Negate()))
+                {
                     pss.AddObserved(p);
+                    pss.m_bsInitialBelief.AddObserved(p);
+                }
             }
             modifiedPredicates = new HashSet<Predicate>();
         }
@@ -591,6 +599,21 @@ namespace CPORLib.Algorithms
             resetModifiedPredicates(pssCurrent, modifiedAction);
             pssCurrent.GetTaggedDomainAndProblem(DeadendStrategies.Lazy, false, out int ctags, out dTaggedDE, out pTaggedDE, true, null);
 
+            if (InaccuracyHandlingStrategy==InaccuracyHandlingStrategies.MakeTrue)
+            {
+                Predicate makePredicate = new GroundedPredicate("make");
+                dTaggedDE.AddPredicate(makePredicate);
+                List<Action> tempList = dTaggedDE.Actions.Where(a => a.Name.StartsWith("make")).ToList();
+                foreach (Action a in tempList)
+                {
+                    a.AddPrecondition(makePredicate);
+                    a.AddEffect(makePredicate.Negate());
+                }
+                dTaggedDE.AddCostActions(makePredicate, tempList, true);
+                List<Action> costActions = tempList.Where(a => !dTaggedDE.Actions.Contains(a)).ToList();
+                foreach (Action a in costActions)
+                    dTaggedDE.AddAction(a);
+            }
             ExecutionData.ReplanningCount++;
 
             try
@@ -627,7 +650,7 @@ namespace CPORLib.Algorithms
             if (lPlan == null || lPlan.Count() == 0)
             {
                 Debug.WriteLine("Classical Planner Failed to find solution after deadend");
-                throw new DeadendException("Failed to solve problem  (Deadend) even after modifying initial predicated to account for false negatives.");
+                throw new DeadendException("Failed to solve problem  (Deadend) even after modifying initial predicates to account for false negatives.");
             }
 
             int makeActions = lPlan.Count(s => s.StartsWith("Make:"));
@@ -655,7 +678,38 @@ namespace CPORLib.Algorithms
                         }
                     }
                     ExecutionData.ReplanningIncludeModCount++;
-                    lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
+
+                    //lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
+
+                    bool foundPlan = false;
+                    while (!foundPlan && ((CompoundFormula)pTaggedModified.Goal).Operands.Count() > 1)
+                    {
+                        try
+                        {
+                            lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
+                            foundPlan = true;
+                        }
+                        catch (DeadendException de)
+                        {
+                            Console.WriteLine("weird deadend with modified or-goal");
+                            ((CompoundFormula)pTaggedModified.Goal).Operands.RemoveAt(0);
+                        }
+                    }
+                    if (!foundPlan)
+                    {
+                        try
+                        {
+                            pTaggedModified.Goal = pTaggedModified.Goal.Simplify();
+
+                            lPlan = RunPlanner(dTaggedModified, pTaggedModified, -1);
+                        }
+                        catch (DeadendException de)
+                        {
+
+                            throw new DeadendException("weird deadend with modified or-goal even after removing preds");
+                        }
+                    }
+                    
                 }
 
                 foreach (Predicate p in Problem.Domain.Uncertainties)
@@ -679,13 +733,11 @@ namespace CPORLib.Algorithms
                         found = pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(xorRemove);
                     }
                 }
+                Predicate makeRemove = new GroundedPredicate($"make");
+                Problem.Domain.RemoveFakePredicate(makeRemove);
+                pssCurrent.m_bsInitialBelief.Problem.Domain.RemoveFakePredicate(makeRemove);
             }
-            if (InaccuracyHandlingStrategy != InaccuracyHandlingStrategies.BLOptimistic) {
-                InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.BLOptimistic;
-                pssCurrent.m_bsInitialBelief.ModifyProblemBeforeStateSelection(null);
-                PartiallySpecifiedState pss = pssCurrent.m_bsInitialBelief.GetPartiallySpecifiedState();
-                pssCurrent.m_lObserved = pss.Observed;
-            }
+
             return makeActions > 0;
         }
 

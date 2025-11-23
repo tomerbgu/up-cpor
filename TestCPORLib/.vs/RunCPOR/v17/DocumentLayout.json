@@ -1,0 +1,206 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\TestCPORLib\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{7613AC3D-1444-4DA4-8562-F01BAFB2D437}|RunCPOR.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\testcporlib\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7613AC3D-1444-4DA4-8562-F01BAFB2D437}|RunCPOR.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\algorithms\\sdrplanner.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\algorithms\\plannerbase.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\planningmodel\\beliefstate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\planningmodel\\partiallyspecifiedstate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\tools\\options.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\planningmodel\\domain.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\run.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\ffcs\\search.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\planningmodel\\problem.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\logicalutilities\\predicate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CB7E763-4B82-4E71-B476-19477FFE2D19}|..\\CPORLib\\CPORLib.csproj|c:\\users\\travkaie\\onedrive - intel corporation\\documents\\school\\up-cpor\\cporlib\\logicalutilities\\groundedpredicate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 303,
+          "SelectedChildIndex": 3,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "PlannerBase.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\Algorithms\\PlannerBase.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\Algorithms\\PlannerBase.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\Algorithms\\PlannerBase.cs",
+              "RelativeToolTip": "..\\CPORLib\\Algorithms\\PlannerBase.cs",
+              "ViewState": "AgIAAAkCAAAAAAAAAAAiwBYCAAA8AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-18T14:57:33.628Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "Run.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\Run.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\Run.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\Run.cs",
+              "RelativeToolTip": "..\\CPORLib\\Run.cs",
+              "ViewState": "AgIAACkAAAAAAAAAAAAAAIIAAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-06T05:39:25.375Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\TestCPORLib\\Program.cs",
+              "RelativeDocumentMoniker": "Program.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\TestCPORLib\\Program.cs",
+              "RelativeToolTip": "Program.cs",
+              "ViewState": "AgIAAEwAAAAAAAAAAAAiwFkAAAAoAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-29T12:33:48.96Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "Search.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\FFCS\\Search.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\FFCS\\Search.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\FFCS\\Search.cs",
+              "RelativeToolTip": "..\\CPORLib\\FFCS\\Search.cs",
+              "ViewState": "AgIAAEABAAAAAAAAAAAowEoBAAAYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-29T09:52:16.88Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "Domain.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\PlanningModel\\Domain.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\PlanningModel\\Domain.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\PlanningModel\\Domain.cs",
+              "RelativeToolTip": "..\\CPORLib\\PlanningModel\\Domain.cs",
+              "ViewState": "AgIAAB4QAAAAAAAAAAAiwCwQAAAIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-26T11:29:36.948Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "BeliefState.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\PlanningModel\\BeliefState.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\PlanningModel\\BeliefState.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\PlanningModel\\BeliefState.cs",
+              "RelativeToolTip": "..\\CPORLib\\PlanningModel\\BeliefState.cs",
+              "ViewState": "AgIAANYBAAAAAAAAAAAUwOABAAAiAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-26T10:28:30.846Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "SDRPlanner.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\Algorithms\\SDRPlanner.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\Algorithms\\SDRPlanner.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\Algorithms\\SDRPlanner.cs",
+              "RelativeToolTip": "..\\CPORLib\\Algorithms\\SDRPlanner.cs",
+              "ViewState": "AgIAAMcAAAAAAAAAAAAiwNIAAAAQAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-26T09:14:51.003Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "PartiallySpecifiedState.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\PlanningModel\\PartiallySpecifiedState.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\PlanningModel\\PartiallySpecifiedState.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\PlanningModel\\PartiallySpecifiedState.cs",
+              "RelativeToolTip": "..\\CPORLib\\PlanningModel\\PartiallySpecifiedState.cs",
+              "ViewState": "AgIAALYDAAAAAAAAAAAiwMEDAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-26T07:30:58.527Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "Predicate.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\LogicalUtilities\\Predicate.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\LogicalUtilities\\Predicate.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\LogicalUtilities\\Predicate.cs",
+              "RelativeToolTip": "..\\CPORLib\\LogicalUtilities\\Predicate.cs",
+              "ViewState": "AgIAADMAAAAAAAAAAAAcwD4AAAAZAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-25T15:57:23.829Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "Options.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\Tools\\Options.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\Tools\\Options.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\Tools\\Options.cs",
+              "RelativeToolTip": "..\\CPORLib\\Tools\\Options.cs",
+              "ViewState": "AgIAAAwAAAAAAAAAAADwvxUAAAA5AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-25T14:19:37.966Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "Problem.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\PlanningModel\\Problem.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\PlanningModel\\Problem.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\PlanningModel\\Problem.cs",
+              "RelativeToolTip": "..\\CPORLib\\PlanningModel\\Problem.cs",
+              "ViewState": "AgIAAPADAAAAAAAAAAAmwAAEAAAUAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-25T14:00:16.958Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "GroundedPredicate.cs",
+              "DocumentMoniker": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\LogicalUtilities\\GroundedPredicate.cs",
+              "RelativeDocumentMoniker": "..\\CPORLib\\LogicalUtilities\\GroundedPredicate.cs",
+              "ToolTip": "C:\\Users\\travkaie\\OneDrive - Intel Corporation\\Documents\\School\\up-cpor\\CPORLib\\LogicalUtilities\\GroundedPredicate.cs",
+              "RelativeToolTip": "..\\CPORLib\\LogicalUtilities\\GroundedPredicate.cs",
+              "ViewState": "AgIAAJEAAAAAAAAAAAD4v50AAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-24T12:19:39.193Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

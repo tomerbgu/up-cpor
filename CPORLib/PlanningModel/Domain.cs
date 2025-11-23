@@ -912,6 +912,9 @@ namespace CPORLib.PlanningModel
 
         public bool RemoveFakePredicate(Predicate p)
         {
+            List<Predicate> toRemove = Predicates.Where(pred => pred.Name.Equals(p.Name)).ToList();
+            if (toRemove.Count() > 0)
+                p = toRemove[0];
             bool found = Predicates.Remove(p);
             if (found)
             {
@@ -1057,9 +1060,13 @@ namespace CPORLib.PlanningModel
                     pp2.AddParameter(par);
                 }
                 andEffect.AddOperand(pp2);
+
                 a.Effects = andEffect;
                 lActions.Add(a);
             }
+
+            
+
             return lActions;
         }
 
@@ -3989,7 +3996,7 @@ namespace CPORLib.PlanningModel
                 PlanningAction a = Actions[aIndex];
                 if (AllowMultipleOverSpecifications)
                 {
-                    if (RandomGenerator.NextDouble() > Options.fakePredicateThreshold)
+                    if (RandomGenerator.NextDouble() > Options.precondThreshold)
                     {
                         continue;
                     }
@@ -4155,6 +4162,11 @@ namespace CPORLib.PlanningModel
 
             var combosNotTried = precondStatistics.Where(entry => !PreviouslyModifiedActions.Contains(entry.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0])).ToList();
             var actionsNotExhausted = combosNotTried.Where(entry => GetActionByName(getActionNameFromArray(entry.Key.Name)).Preconditions==null || char.IsDigit(getActionNameFromArray(entry.Key.Name)[getActionNameFromArray(entry.Key.Name).Length - 1])).ToList(); //todo this is necessary somewhere if we dont filter normal actions
+            if (actionsNotExhausted.Count==0)
+            {
+                Console.WriteLine("All action preconditions exhausted");
+                return Actions;
+            }
             var entryWithMaxValue1 = actionsNotExhausted.OrderBy(entry => entry.Value).Reverse().FirstOrDefault();
             string resultActionName1 = entryWithMaxValue1.Key.Name.Split(Utilities.DELIMITER_CHAR[0])[0];
 
@@ -4402,9 +4414,10 @@ namespace CPORLib.PlanningModel
             return false;
         }
 
-        private void AddCostActions(Predicate p, List<PlanningAction> actionList)
+        public void AddCostActions(Predicate p, List<PlanningAction> actionList, bool multiple_mods=false)
         {
-            for (int i = 0; i < Options.ActionCost; i++)
+            int cost = multiple_mods ? MakeCost : PrecondCost;
+            for (int i = 0; i < cost; i++)
             {
                 PlanningAction pa = new PlanningAction("prepare-for-" + p.Name + "-" + i);
                 Predicate pi = new GroundedPredicate(pa.Name);
@@ -4417,7 +4430,7 @@ namespace CPORLib.PlanningModel
                     AddPredicate(pi);
                     //cfEffect.AddOperand(pfPrecond);
                 }
-                else if (!Options.AllowMultipleOverSpecifications)
+                else if (!multiple_mods)
                 {
                     PredicateFormula pfPrecondNoOverSpecifications = new PredicateFormula(NoOverSpecifications);
                     pa.Preconditions = pfPrecondNoOverSpecifications.Negate();
@@ -4426,10 +4439,11 @@ namespace CPORLib.PlanningModel
                 Predicate piPlus1 = new GroundedPredicate("prepare-for-" + p.Name + "-" + (i+1));
                 PredicateFormula pfEffect = new PredicateFormula(piPlus1);
 
-                if (i==Options.ActionCost-1)
+                if (i==cost-1)
                 {
                     cfEffect.AddOperand(new PredicateFormula(p));
-                    AddPredicate(p);
+                    if (!multiple_mods)
+                        AddPredicate(p);
                 }
                 else
                     cfEffect.AddOperand(pfEffect);

@@ -1,3 +1,8 @@
 is_global = true
 build_property.RootNamespace = CPORLib
-build_property.ProjectDir = D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\
+build_property.ProjectDir = C:\Users\travkaie\OneDrive - Intel Corporation\Documents\School\up-cpor\CPORLib\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.CsWinRTUseWindowsUIXamlProjections = false
+build_property.EffectiveAnalysisLevelStyle = 
+build_property.EnableCodeStyleSeverity = 

@@ -1,10 +1,20 @@
-D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\bin\Release\netstandard2.0\CPORLib.deps.json
-D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\bin\Release\netstandard2.0\CPORLib.dll
-D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\bin\Release\netstandard2.0\CPORLib.pdb
-D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\obj\Release\netstandard2.0\CPORLib.csproj.AssemblyReference.cache
-D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\obj\Release\netstandard2.0\CPORLib.GeneratedMSBuildEditorConfig.editorconfig
-D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\obj\Release\netstandard2.0\CPORLib.AssemblyInfoInputs.cache
-D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\obj\Release\netstandard2.0\CPORLib.AssemblyInfo.cs
-D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\obj\Release\netstandard2.0\CPORLib.csproj.CoreCompileInputs.cache
-D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\obj\Release\netstandard2.0\CPORLib.dll
-D:\OneDrive\OneDrive - BGU\Research\projects\AIPlan4EU\up-cpor\CPORLib\obj\Release\netstandard2.0\CPORLib.pdb
+D:/OneDrive/OneDrive - BGU/Research/projects/AIPlan4EU/up-cpor/CPORLib/bin/Release/netstandard2.0/CPORLib.deps.json
+D:/OneDrive/OneDrive - BGU/Research/projects/AIPlan4EU/up-cpor/CPORLib/bin/Release/netstandard2.0/CPORLib.dll
+D:/OneDrive/OneDrive - BGU/Research/projects/AIPlan4EU/up-cpor/CPORLib/bin/Release/netstandard2.0/CPORLib.pdb
+D:/OneDrive/OneDrive - BGU/Research/projects/AIPlan4EU/up-cpor/CPORLib/obj/Release/netstandard2.0/CPORLib.csproj.AssemblyReference.cache
+D:/OneDrive/OneDrive - BGU/Research/projects/AIPlan4EU/up-cpor/CPORLib/obj/Release/netstandard2.0/CPORLib.GeneratedMSBuildEditorConfig.editorconfig
+D:/OneDrive/OneDrive - BGU/Research/projects/AIPlan4EU/up-cpor/CPORLib/obj/Release/netstandard2.0/CPORLib.AssemblyInfoInputs.cache
+D:/OneDrive/OneDrive - BGU/Research/projects/AIPlan4EU/up-cpor/CPORLib/obj/Release/netstandard2.0/CPORLib.AssemblyInfo.cs
+D:/OneDrive/OneDrive - BGU/Research/projects/AIPlan4EU/up-cpor/CPORLib/obj/Release/netstandard2.0/CPORLib.csproj.CoreCompileInputs.cache
+D:/OneDrive/OneDrive - BGU/Research/projects/AIPlan4EU/up-cpor/CPORLib/obj/Release/netstandard2.0/CPORLib.dll
+D:/OneDrive/OneDrive - BGU/Research/projects/AIPlan4EU/up-cpor/CPORLib/obj/Release/netstandard2.0/CPORLib.pdb
+/cs_storage/tomerrav/dec2520204/CPORLib/bin/Release/netstandard2.0/CPORLib.deps.json
+/cs_storage/tomerrav/dec2520204/CPORLib/bin/Release/netstandard2.0/CPORLib.dll
+/cs_storage/tomerrav/dec2520204/CPORLib/bin/Release/netstandard2.0/CPORLib.pdb
+/cs_storage/tomerrav/dec2520204/CPORLib/obj/Release/netstandard2.0/CPORLib.csproj.AssemblyReference.cache
+/cs_storage/tomerrav/dec2520204/CPORLib/obj/Release/netstandard2.0/CPORLib.GeneratedMSBuildEditorConfig.editorconfig
+/cs_storage/tomerrav/dec2520204/CPORLib/obj/Release/netstandard2.0/CPORLib.AssemblyInfoInputs.cache
+/cs_storage/tomerrav/dec2520204/CPORLib/obj/Release/netstandard2.0/CPORLib.AssemblyInfo.cs
+/cs_storage/tomerrav/dec2520204/CPORLib/obj/Release/netstandard2.0/CPORLib.csproj.CoreCompileInputs.cache
+/cs_storage/tomerrav/dec2520204/CPORLib/obj/Release/netstandard2.0/CPORLib.dll
+/cs_storage/tomerrav/dec2520204/CPORLib/obj/Release/netstandard2.0/CPORLib.pdb

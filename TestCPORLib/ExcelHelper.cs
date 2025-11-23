@@ -22,7 +22,7 @@ namespace RunCPOR
             worksheet.Cells[endRow, startCol, endRow, endCol].Style.Border.Bottom.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thick;  // Bottom border
         }
 
-        private static void FormatTable(ExcelWorksheet worksheet, string problemName, int count, int top, List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> EDList, int overlap, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>> settings)
+        private static void FormatTable(ExcelWorksheet worksheet, string problemName, int count, int top, List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> EDList, int overlap, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, int>> settings)
         {
             int numOfStats = 11;
             worksheet.Cells[top + 1, 1, top + numOfStats, 1].Merge = true;
@@ -97,7 +97,7 @@ namespace RunCPOR
         }
 
         static string plusMinus = "±";
-        public static void WriteToExcel(string folderPath, string sTestPath, List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> EDList, HashSet<int> seedSet, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, double>> settings, bool op)
+        public static void WriteToExcel(string folderPath, string sTestPath, List<Tuple<List<ExecutionData>, TimeSpan, InaccuracyHandlingStrategies, string>> EDList, HashSet<int> seedSet, List<Tuple<Options.InaccuracyHandlingStrategies, bool, int, bool, int>> settings, bool op)
         {
             string[] filePaths = {folderPath + $"/output_summary_{DateTime.Now.ToString("MM_dd_HHmmss")}_{Options.PredicateInaccuracy}_{Options.OverspecifiedPreconditions}_{Options.threshold}_{op}.xlsx",
                 sTestPath + $"/output_summary_{DateTime.Now.ToString("MM_dd_HHmmss")}_{Options.PredicateInaccuracy}_{Options.OverspecifiedPreconditions}_{Options.threshold}_{op}.xlsx" };

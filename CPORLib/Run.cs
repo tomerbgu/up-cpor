@@ -131,6 +131,11 @@ namespace CPORLib
             Domain domain = parser.ParseDomain(sDomainFile);
             Problem problem = parser.ParseProblem(sProblemFile, domain);
             Console.WriteLine($"{Options.PredicateInaccuracy}");
+            HashSet<string> all = new HashSet<string>();
+            foreach (CompoundFormula cf in problem.Hidden)
+                foreach (Predicate p in cf.GetAllPredicates())
+                    all.Add(p.Canonical().ToString());
+            Console.WriteLine($"Init: {problem.Known.Count + all.Count}");
             Console.WriteLine($"Init Known - True:\t{problem.Known.Where(p=>!p.Negation && domain.Uncertainties.Select(u=>u.Name).Contains(p.Name)).Count()}");
             Console.WriteLine($"Init Known - False:\t{problem.Known.Where(p => p.Negation && domain.Uncertainties.Select(u => u.Name).Contains(p.Name)).Count()}");
         }
@@ -143,7 +148,7 @@ namespace CPORLib
 
 
 
-        public static ExecutionData RunPlanner(string sDomainFile, string sProblemFile, string sOutputFile, bool bOnline, HashSet<int> NoDeadends, bool bValidate, CancellationToken cancellationFlagInput)
+        public static ExecutionData RunPlanner(string sDomainFile, string sProblemFile, string sOutputFile, bool bOnline, bool bValidate, CancellationToken cancellationFlagInput)
         {
             cancellationFlag = cancellationFlagInput;
             Debug.WriteLine("Reading domain and problem");
@@ -152,9 +157,6 @@ namespace CPORLib
 
             Debug.WriteLine("Done reading domain and problem");
             Problem problem = parser.ParseProblem(sProblemFile, domain);
-
-            if (NoDeadends == null)
-                NoDeadends = new HashSet<int>();
 
             if (bOnline)
             {    

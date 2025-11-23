@@ -15,27 +15,33 @@ namespace CPORLib.Tools
         public static DeadendStrategies DeadendStrategy = DeadendStrategies.Lazy;
 
         //Pessimistic -> change each possible uncertainty as unknown
-        //Pessimistic -> change each possible uncertainty as true
-        public enum InaccuracyHandlingStrategies { BLPessimistic, BLOptimistic, Lazy, MakeTrue };
+        //Optimistic -> change each possible uncertainty as true
+        public enum InaccuracyHandlingStrategies { BLPessimistic, BLOptimistic, Lazy, LazyPessimistic, LazyOptimistic, MakeTrue };
         public static InaccuracyHandlingStrategies InaccuracyHandlingStrategy = InaccuracyHandlingStrategies.MakeTrue;
+
+        public static List<InaccuracyHandlingStrategies> LazyStrategies = new List<InaccuracyHandlingStrategies> {  InaccuracyHandlingStrategies.LazyPessimistic,
+                                                                                                                    InaccuracyHandlingStrategies.LazyOptimistic};
+
         public enum PredicateInaccuracies { FalsePositive, FalseNegative, Both, Neither }
-        public static PredicateInaccuracies PredicateInaccuracy = PredicateInaccuracies.FalseNegative; 
+        public static PredicateInaccuracies PredicateInaccuracy = PredicateInaccuracies.Both; 
 
         public static bool OverspecifiedPreconditions = false;
         public static bool SolveBothSequentially = false;
         public static bool AllowMultipleOverSpecifications = false;
         public static bool FixOneAtATime = true; //for overspecified preconditions
         public static bool UseCosts = true;
-        public static int ActionCost = 5;
+        public static bool TranslateXor = false;
+        public static int PrecondCost = 5;
         public static bool UseFakePreds = false;
         public static int NumFakePreds = 1;
-        public static double fakePredicateThreshold = 0;
+        public static int MakeCost = 0;
+        public static double fakeThreshold = 0;
 
         public static bool Verbose = false;
-        public static double threshold = 0.2;
+        public static double threshold = 0.8;
         public static double precondThreshold = 0.5;
-        public static int Iterations = 50;
-        public static int MaxIterations = 500;
+        public static int Iterations = 1;
+        public static int MaxIterations = 1;
         public static int MaxTime = 600;
         public static int Factor = 3;
 
